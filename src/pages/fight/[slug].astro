@@ -31,6 +31,17 @@ if (!brawl) {
 const challengerCharacter = brawl.characters[0];
 const challengeeCharacter = brawl.characters[1];
 const isWaitingForChallengee = brawl.characters.length === 1;
+
+// Calculate game phase from brawl state
+let gamePhase: 'waiting' | 'active' | 'finished' = 'waiting';
+if (brawl.winnerId) {
+  gamePhase = 'finished';
+} else if (brawl.characters.length === 2) {
+  gamePhase = 'active';
+}
+
+// Convert winnerId from string | null to string | undefined
+const winner: string | undefined = brawl.winnerId || undefined;
 ---
 
 <html lang="en">
@@ -352,9 +363,9 @@ const isWaitingForChallengee = brawl.characters.length === 1;
                 player1: challengerCharacter,
                 player2: challengeeCharacter,
                 currentPlayer: brawl.currentPlayerId || challengerCharacter.id,
-                gamePhase: brawl.gamePhase || 'active',
+                gamePhase: gamePhase,
                 turnNumber: brawl.turnNumber || 1,
-                winner: brawl.winner
+                winner: brawl.winnerId
               }}
               myCharacterId="BROWSER_DETERMINED"
               browserId="BROWSER_DETERMINED"

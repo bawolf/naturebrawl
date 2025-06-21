@@ -26,7 +26,7 @@ interface GameState {
   currentPlayer: string;
   gamePhase: 'waiting' | 'active' | 'finished';
   turnNumber: number;
-  winner?: string;
+  winner?: string | null;
 }
 
 interface BattleMessage {
@@ -85,14 +85,7 @@ export default function BattleInterface({
   const [gameState, setGameState] = useState<GameState | null>(
     initialGameState
   );
-  const [battleMessages, setBattleMessages] = useState<BattleMessage[]>([
-    {
-      id: '1',
-      message: '⚔️ Battle begins! Choose your move!',
-      type: 'info',
-      timestamp: new Date(),
-    },
-  ]);
+  const [battleMessages, setBattleMessages] = useState<BattleMessage[]>([]);
   const [processingAttackId, setProcessingAttackId] = useState<string | null>(
     null
   );
@@ -115,16 +108,60 @@ export default function BattleInterface({
 
   // Layout classes based on player position
   const layoutClasses = {
-    // Player is always at bottom, enemy at top
-    // If I'm player 1: I'm bottom-right, enemy top-left
-    // If I'm player 2: I'm bottom-left, enemy top-right
+    // Match character positions in generated images:
+    // Player 1 = right side, Player 2 = left side
     playerHealth: isPlayer1Me ? 'bottom-4 right-4' : 'bottom-4 left-4',
-    enemyHealth: isPlayer1Me ? 'top-4 left-4' : 'top-4 right-4',
-    turnIndicator: isPlayer1Me ? 'top-4 right-4' : 'top-4 left-4',
-    currentPlayerIndicator: isPlayer1Me
-      ? 'bottom-4 left-4'
-      : 'bottom-4 right-4',
+    enemyHealth: isPlayer1Me ? 'bottom-4 left-4' : 'bottom-4 right-4',
+    turnIndicator: 'top-4 right-4',
+    currentPlayerIndicator: 'top-4 left-4',
   };
+
+  // Load battle events from database on mount
+  useEffect(() => {
+    const loadBattleEvents = async () => {
+      if (!slug) return;
+
+      try {
+        const response = await fetch(`/api/brawls/${slug}/events`);
+        if (response.ok) {
+          const { events } = await response.json();
+
+          // Convert database events to BattleMessage format
+          const messages: BattleMessage[] = events.map((event: any) => ({
+            id: event.id,
+            message: event.message,
+            type: event.eventType,
+            timestamp: new Date(event.createdAt),
+          }));
+
+          // If no events, add the default message
+          if (messages.length === 0) {
+            messages.push({
+              id: '1',
+              message: '⚔️ Battle begins! Choose your move!',
+              type: 'info',
+              timestamp: new Date(),
+            });
+          }
+
+          setBattleMessages(messages);
+        }
+      } catch (error) {
+        console.error('Error loading battle events:', error);
+        // Fallback to default message
+        setBattleMessages([
+          {
+            id: '1',
+            message: '⚔️ Battle begins! Choose your move!',
+            type: 'info',
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    };
+
+    loadBattleEvents();
+  }, [slug]);
 
   // Setup SSE connection
   useEffect(() => {
@@ -329,153 +366,161 @@ export default function BattleInterface({
           )}
 
           {/* Enemy Health Info */}
-          <div className={`absolute z-10 ${layoutClasses.enemyHealth}`}>
-            <div
-              className="bg-red-100 border-2 border-black p-2 min-w-48 relative"
-              style={{
-                border: '3px solid #f44336',
-                boxShadow:
-                  'inset -2px -2px 0px #d32f2f, inset 2px 2px 0px #ef5350, 0 0 10px rgba(244, 67, 54, 0.3), 2px 2px 0px #808080',
-              }}
-            >
-              <div className="absolute -top-2 left-2 bg-red-500 text-white px-2 py-1 text-xs font-bold rounded-sm">
-                ENEMY
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-xs">
-                  {getSpeciesName(enemyCharacter.species).toUpperCase()}
-                </span>
-              </div>
+          {gameState.gamePhase !== 'finished' && (
+            <div className={`absolute z-10 ${layoutClasses.enemyHealth}`}>
               <div
-                className="h-2 bg-white border border-black relative overflow-hidden mb-1"
+                className="bg-red-100 border-2 border-black p-4 min-w-48 relative"
                 style={{
-                  boxShadow: 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
+                  border: '3px solid #f44336',
+                  boxShadow:
+                    'inset -2px -2px 0px #d32f2f, inset 2px 2px 0px #ef5350, 0 0 10px rgba(244, 67, 54, 0.3), 2px 2px 0px #808080',
                 }}
               >
+                <div className="absolute -top-2 left-2 bg-red-500 text-white px-2 py-1 text-xs font-bold rounded-sm">
+                  ENEMY
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-xs">
+                    {getSpeciesName(enemyCharacter.species).toUpperCase()}
+                  </span>
+                </div>
                 <div
-                  className={`h-full transition-all duration-500 ${getHealthPercentage(enemyCharacter.health, enemyCharacter.maxHealth) <= 25 ? 'animate-pulse bg-red-500' : 'bg-gradient-to-r from-green-500 via-yellow-500 to-red-500'}`}
+                  className="h-2 bg-white border border-black relative overflow-hidden mb-1"
                   style={{
-                    width: `${getHealthPercentage(enemyCharacter.health, enemyCharacter.maxHealth)}%`,
-                    imageRendering: 'pixelated',
+                    boxShadow: 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
                   }}
-                />
-              </div>
-              <div className="text-xs">
-                <span>
-                  {enemyCharacter.health}/{enemyCharacter.maxHealth}
-                </span>
+                >
+                  <div
+                    className={`h-full transition-all duration-500 ${getHealthPercentage(enemyCharacter.health, enemyCharacter.maxHealth) <= 25 ? 'animate-pulse bg-red-500' : 'bg-gradient-to-r from-green-500 via-yellow-500 to-red-500'}`}
+                    style={{
+                      width: `${getHealthPercentage(enemyCharacter.health, enemyCharacter.maxHealth)}%`,
+                      imageRendering: 'pixelated',
+                    }}
+                  />
+                </div>
+                <div className="text-xs">
+                  <span>
+                    {enemyCharacter.health}/{enemyCharacter.maxHealth}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Player Health Info */}
-          <div className={`absolute z-10 ${layoutClasses.playerHealth}`}>
-            <div
-              className="bg-green-100 border-2 border-black p-2 min-w-48 relative"
-              style={{
-                border: '3px solid #4caf50',
-                boxShadow:
-                  'inset -2px -2px 0px #388e3c, inset 2px 2px 0px #81c784, 0 0 10px rgba(76, 175, 80, 0.3), 2px 2px 0px #808080',
-              }}
-            >
-              <div className="absolute -top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs font-bold rounded-sm">
-                YOU
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-xs">
-                  {getSpeciesName(myCharacter.species).toUpperCase()}
-                </span>
-              </div>
+          {gameState.gamePhase !== 'finished' && (
+            <div className={`absolute z-10 ${layoutClasses.playerHealth}`}>
               <div
-                className="h-2 bg-white border border-black relative overflow-hidden mb-1"
+                className="bg-green-100 border-2 border-black p-4 min-w-48 relative"
                 style={{
-                  boxShadow: 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
+                  border: '3px solid #4caf50',
+                  boxShadow:
+                    'inset -2px -2px 0px #388e3c, inset 2px 2px 0px #81c784, 0 0 10px rgba(76, 175, 80, 0.3), 2px 2px 0px #808080',
                 }}
               >
+                <div className="absolute -top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs font-bold rounded-sm">
+                  YOU
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-xs">
+                    {getSpeciesName(myCharacter.species).toUpperCase()}
+                  </span>
+                </div>
                 <div
-                  className={`h-full transition-all duration-500 ${getHealthPercentage(myCharacter.health, myCharacter.maxHealth) <= 25 ? 'animate-pulse bg-red-500' : 'bg-gradient-to-r from-green-500 via-yellow-500 to-red-500'}`}
+                  className="h-2 bg-white border border-black relative overflow-hidden mb-1"
                   style={{
-                    width: `${getHealthPercentage(myCharacter.health, myCharacter.maxHealth)}%`,
-                    imageRendering: 'pixelated',
+                    boxShadow: 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
                   }}
-                />
-              </div>
-              <div className="text-xs mb-2">
-                <span>
-                  {myCharacter.health}/{myCharacter.maxHealth}
-                </span>
-              </div>
-              {/* Energy Bar */}
-              <div
-                className="h-2 border border-black relative overflow-hidden"
-                style={{
-                  background: 'rgba(0, 0, 128, 0.8)',
-                  boxShadow: 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
-                }}
-              >
+                >
+                  <div
+                    className={`h-full transition-all duration-500 ${getHealthPercentage(myCharacter.health, myCharacter.maxHealth) <= 25 ? 'animate-pulse bg-red-500' : 'bg-gradient-to-r from-green-500 via-yellow-500 to-red-500'}`}
+                    style={{
+                      width: `${getHealthPercentage(myCharacter.health, myCharacter.maxHealth)}%`,
+                      imageRendering: 'pixelated',
+                    }}
+                  />
+                </div>
+                <div className="text-xs mb-2">
+                  <span>
+                    {myCharacter.health}/{myCharacter.maxHealth}
+                  </span>
+                </div>
+                {/* Energy Bar */}
                 <div
-                  className="h-full transition-all duration-500"
+                  className="h-2 border border-black relative overflow-hidden"
                   style={{
-                    width: `${getEnergyPercentage(myCharacter.energy, myCharacter.maxEnergy)}%`,
-                    background:
-                      'linear-gradient(90deg, #0080ff 0%, #00ffff 100%)',
-                    imageRendering: 'pixelated',
+                    background: 'rgba(0, 0, 128, 0.8)',
+                    boxShadow: 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
                   }}
-                />
-              </div>
-              <div className="text-xs">
-                <span>
-                  {myCharacter.energy}/{myCharacter.maxEnergy} EP
-                </span>
+                >
+                  <div
+                    className="h-full transition-all duration-500"
+                    style={{
+                      width: `${getEnergyPercentage(myCharacter.energy, myCharacter.maxEnergy)}%`,
+                      background:
+                        'linear-gradient(90deg, #0080ff 0%, #00ffff 100%)',
+                      imageRendering: 'pixelated',
+                    }}
+                  />
+                </div>
+                <div className="text-xs">
+                  <span>
+                    {myCharacter.energy}/{myCharacter.maxEnergy} EP
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Turn Indicator */}
-          <div className={`absolute z-10 ${layoutClasses.turnIndicator}`}>
-            <div
-              className="bg-yellow-400 border-2 border-black px-2 py-1 animate-pulse"
-              style={{
-                boxShadow: '2px 2px 0px #808080',
-              }}
-            >
-              <span className="text-xs font-bold text-black">
-                TURN {gameState.turnNumber}
-              </span>
-            </div>
-          </div>
-
-          {/* Current Player Indicator */}
-          <div
-            className={`absolute z-10 ${layoutClasses.currentPlayerIndicator}`}
-          >
-            <div
-              className="bg-gray-100 border-2 border-black p-2"
-              style={{
-                background: 'rgba(248, 248, 248, 0.95)',
-                boxShadow: '2px 2px 0px #808080',
-              }}
-            >
-              <div className="text-xs font-bold">
-                {isMyTurn ? (
-                  <span className="text-green-600">🎯 YOUR TURN!</span>
-                ) : (
-                  <span className="text-red-600">
-                    ⏳ {getSpeciesName(enemyCharacter.species).toUpperCase()}'S
-                    TURN
-                  </span>
-                )}
+          {gameState.gamePhase !== 'finished' && (
+            <div className={`absolute z-10 ${layoutClasses.turnIndicator}`}>
+              <div
+                className="bg-yellow-400 border-2 border-black px-2 py-1 animate-pulse"
+                style={{
+                  boxShadow: '2px 2px 0px #808080',
+                }}
+              >
+                <span className="text-xs font-bold text-black">
+                  TURN {gameState.turnNumber}
+                </span>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Current Player Indicator */}
+          {gameState.gamePhase !== 'finished' && (
+            <div
+              className={`absolute z-10 ${layoutClasses.currentPlayerIndicator}`}
+            >
+              <div
+                className="bg-gray-100 border-2 border-black p-2"
+                style={{
+                  background: 'rgba(248, 248, 248, 0.95)',
+                  boxShadow: '2px 2px 0px #808080',
+                }}
+              >
+                <div className="text-xs font-bold">
+                  {isMyTurn ? (
+                    <span className="text-green-600">🎯 YOUR TURN!</span>
+                  ) : (
+                    <span className="text-red-600">
+                      ⏳ {getSpeciesName(enemyCharacter.species).toUpperCase()}
+                      'S TURN
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Victory Screen */}
       {gameState.gamePhase === 'finished' && gameState.winner && (
-        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
           <div
-            className="bg-white border-4 border-black p-8 max-w-md w-full mx-4"
+            className="bg-white border-4 border-black px-6 py-4"
             style={{
               fontFamily: "'Press Start 2P', monospace",
               boxShadow:
@@ -483,7 +528,7 @@ export default function BattleInterface({
             }}
           >
             <div className="text-center">
-              <div className="text-2xl mb-6">
+              <div className="text-lg mb-2">
                 🏆{' '}
                 {getSpeciesName(
                   gameState.winner === myCharacter.id
@@ -492,51 +537,52 @@ export default function BattleInterface({
                 ).toUpperCase()}{' '}
                 WINS! 🏆
               </div>
-
-              <div className="text-sm mb-2">
-                {gameState.winner === myCharacter.id ? 'VICTORY!' : 'DEFEAT!'}
-              </div>
-
-              <div className="text-xs mb-6 text-gray-600">
-                Battle completed in {gameState.turnNumber} turns!
-              </div>
-
-              <div className="space-y-4">
-                <button
-                  className="w-full border-2 border-black p-4 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
-                  style={{
-                    fontFamily: "'Press Start 2P', monospace",
-                    fontSize: '10px',
-                    boxShadow:
-                      'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
-                  }}
-                  onClick={() => (window.location.href = '/')}
-                >
-                  🆕 NEW BATTLE
-                </button>
-                <button
-                  className="w-full border-2 border-black p-4 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
-                  style={{
-                    fontFamily: "'Press Start 2P', monospace",
-                    fontSize: '10px',
-                    boxShadow:
-                      'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
-                  }}
-                  onClick={() => {
-                    if (navigator.share) {
-                      navigator.share({
-                        title: 'Nature Brawl Victory!',
-                        url: window.location.href,
-                      });
-                    } else {
-                      navigator.clipboard.writeText(window.location.href);
-                    }
-                  }}
-                >
-                  📤 SHARE BATTLE
-                </button>
+              <div className="text-xs text-gray-600">
+                {gameState.winner === myCharacter.id ? 'VICTORY!' : 'DEFEAT!'} •{' '}
+                {gameState.turnNumber} turns
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Victory Buttons - Show at bottom when game finished */}
+      {gameState.gamePhase === 'finished' && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="flex space-x-4">
+            <button
+              className="border-2 border-black p-3 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '9px',
+                boxShadow:
+                  'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
+              }}
+              onClick={() => (window.location.href = '/')}
+            >
+              🆕 NEW BATTLE
+            </button>
+            <button
+              className="border-2 border-black p-3 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '9px',
+                boxShadow:
+                  'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
+              }}
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'Nature Brawl Victory!',
+                    url: window.location.href,
+                  });
+                } else {
+                  navigator.clipboard.writeText(window.location.href);
+                }
+              }}
+            >
+              📤 SHARE
+            </button>
           </div>
         </div>
       )}
@@ -642,16 +688,15 @@ export default function BattleInterface({
 
           {/* Battle Log */}
           <div
-            className="bg-gray-100 border-4 border-black p-4 my-2 min-h-20"
+            className="bg-gray-100 border-4 border-black p-4 my-2"
             style={{
               background: '#f8f8f8',
               boxShadow:
                 'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff',
-              maxHeight: '120px',
             }}
           >
             <div className="text-xs font-bold mb-2">BATTLE LOG</div>
-            <div className="text-xs max-h-48 overflow-y-auto">
+            <div className="text-xs">
               {battleMessages.map((msg) => {
                 const bgColor =
                   {

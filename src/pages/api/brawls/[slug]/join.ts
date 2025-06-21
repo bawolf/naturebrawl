@@ -10,6 +10,7 @@ import {
 import { broadcastBrawlUpdate } from './stream';
 import { generateCharacterStats } from '../../../../lib/llm/character-generator';
 import { generateInitialFightScene } from '../../../../lib/services/image-generation';
+import { storeBattleEvent } from '../../../../lib/db/helpers';
 
 export const prerender = false;
 
@@ -147,6 +148,14 @@ export const POST: APIRoute = async ({ request, params }) => {
       },
       brawlReady: true,
     });
+
+    // Store the initial battle event
+    await storeBattleEvent(
+      brawl.id,
+      1,
+      'info',
+      '⚔️ Battle begins! Choose your move!'
+    );
 
     return new Response(
       JSON.stringify({

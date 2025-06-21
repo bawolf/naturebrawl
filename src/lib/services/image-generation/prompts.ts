@@ -24,7 +24,7 @@ export function buildAttackModification(
 ): string {
   const { attackUsed, damage, isCritical, isHit } = attackResult;
 
-  let modification = `The ${attacker.species} is using "${attackUsed.name}" move. `;
+  let modification = `Modify the current image so that the ${attacker.species} is using "${attackUsed.name}" move. `;
 
   if (isHit) {
     modification += `The move connects successfully! `;
@@ -52,7 +52,7 @@ export function buildAttackModification(
     modification += `The ${attacker.species} appears tired after using the move. `;
   }
 
-  modification += `Colorful cartoon fighting game scene with dynamic poses and action effects.`;
+  modification += `Colorful cartoon fighting game scene with dynamic poses and action effects. Keep the same background and lighting.`;
 
   return modification;
 }
