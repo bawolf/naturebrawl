@@ -1,20 +1,20 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './schema';
 import { getRequiredEnvVar } from '../env';
-
-// Get database URL using our cross-platform helper
-const databaseUrl = getRequiredEnvVar('DATABASE_URL');
-
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL environment variable is required');
-}
+import * as schema from './schema';
 
 // Create the connection
-const client = postgres(databaseUrl);
+const client = postgres(getRequiredEnvVar('DATABASE_URL'));
 
 // Create the database instance
 export const db = drizzle(client, { schema });
 
-// Export schema for easy access
+// Export tables and types
 export * from './schema';
+export {
+  brawls,
+  characters,
+  attacks,
+  imageGenerations,
+  battleEvents,
+} from './schema';

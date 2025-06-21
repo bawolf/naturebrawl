@@ -78,10 +78,25 @@ export const imageGenerations = pgTable('image_generations', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// Define battle events table - stores event log for each battle for persistence
+export const battleEvents = pgTable('battle_events', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  brawlId: text('brawl_id')
+    .notNull()
+    .references(() => brawls.id, { onDelete: 'cascade' }),
+  turnNumber: integer('turn_number').notNull(), // Turn when event occurred
+  eventType: text('event_type').notNull(), // 'info', 'attack', 'miss', 'victory', 'error', 'warning'
+  message: text('message').notNull(), // The event message
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // Define relationships
 export const brawlsRelations = relations(brawls, ({ one, many }) => ({
   characters: many(characters),
   imageGenerations: many(imageGenerations),
+  battleEvents: many(battleEvents),
   winner: one(characters, {
     fields: [brawls.winnerId],
     references: [characters.id],
@@ -119,6 +134,13 @@ export const imageGenerationsRelations = relations(
   })
 );
 
+export const battleEventsRelations = relations(battleEvents, ({ one }) => ({
+  brawl: one(brawls, {
+    fields: [battleEvents.brawlId],
+    references: [brawls.id],
+  }),
+}));
+
 // Type exports for TypeScript
 export type Brawl = typeof brawls.$inferSelect;
 export type NewBrawl = typeof brawls.$inferInsert;
@@ -128,3 +150,5 @@ export type Attack = typeof attacks.$inferSelect;
 export type NewAttack = typeof attacks.$inferInsert;
 export type ImageGeneration = typeof imageGenerations.$inferSelect;
 export type NewImageGeneration = typeof imageGenerations.$inferInsert;
+export type BattleEvent = typeof battleEvents.$inferSelect;
+export type NewBattleEvent = typeof battleEvents.$inferInsert;

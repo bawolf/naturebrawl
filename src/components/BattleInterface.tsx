@@ -208,10 +208,8 @@ export default function BattleInterface({
       newGameState.player1.id === attackResult.defenderId
         ? newGameState.player1
         : newGameState.player2;
-    const attackerName =
-      attacker.species.charAt(0).toUpperCase() + attacker.species.slice(1);
-    const defenderName =
-      defender.species.charAt(0).toUpperCase() + defender.species.slice(1);
+    const attackerName = getSpeciesName(attacker.species);
+    const defenderName = getSpeciesName(defender.species);
 
     if (attackResult.isHit) {
       let message = `⚔️ ${attackerName} used ${attackResult.attackUsed.name}!`;
@@ -229,7 +227,7 @@ export default function BattleInterface({
 
     if (attackResult.gameOver) {
       addBattleMessage(`🏆 ${attackerName} wins the battle!`, 'victory');
-      setIsVictoryScreenVisible(true);
+      // Victory screen will be shown when gameState.gamePhase === 'finished'
     }
   };
 
