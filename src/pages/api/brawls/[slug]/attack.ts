@@ -7,6 +7,8 @@ import {
   generateAttackScene,
   generateVictoryImage,
 } from '../../../../lib/services/image-generation';
+import { storeBattleEvent } from '../../../../lib/db/helpers';
+import { getSpeciesName } from '../../../../lib/species';
 
 export const prerender = false;
 
@@ -183,6 +185,51 @@ export const POST: APIRoute = async ({ params, request }) => {
       attackResult,
       gameState: battleSummary,
     });
+
+    // Store battle events in the database
+    const attacker = gameState.brawl.characters.find(
+      (c) => c.id === attackResult.attackerId
+    );
+    const defender = gameState.brawl.characters.find(
+      (c) => c.id === attackResult.defenderId
+    );
+
+    if (attacker && defender) {
+      const attackerName = getSpeciesName(attacker.species);
+      const defenderName = getSpeciesName(defender.species);
+
+      if (attackResult.isHit) {
+        let message = `⚔️ ${attackerName} used ${attackResult.attackUsed.name}!`;
+        if (attackResult.isCritical) {
+          message += ` 💥 Critical hit!`;
+        }
+        message += ` Dealt ${attackResult.damage} damage to ${defenderName}.`;
+        await storeBattleEvent(
+          brawl.id,
+          gameState.brawl.turnNumber,
+          'attack',
+          message
+        );
+      } else {
+        const message = `💨 ${attackerName} used ${attackResult.attackUsed.name} but missed!`;
+        await storeBattleEvent(
+          brawl.id,
+          gameState.brawl.turnNumber,
+          'miss',
+          message
+        );
+      }
+
+      if (attackResult.gameOver) {
+        const message = `🏆 ${attackerName} wins the battle!`;
+        await storeBattleEvent(
+          brawl.id,
+          gameState.brawl.turnNumber,
+          'victory',
+          message
+        );
+      }
+    }
 
     return new Response(
       JSON.stringify({

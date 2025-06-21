@@ -96,7 +96,6 @@ export default function BattleInterface({
   const [processingAttackId, setProcessingAttackId] = useState<string | null>(
     null
   );
-  const [isVictoryScreenVisible, setIsVictoryScreenVisible] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -473,67 +472,77 @@ export default function BattleInterface({
       </div>
 
       {/* Victory Screen */}
-      {isVictoryScreenVisible && gameState.winner && (
-        <div className="space-y-6">
-          <div className="text-center">
-            <div
-              className="bg-gray-100 border-2 border-black p-6 mb-6"
-              style={{
-                background: '#f8f8f8',
-                boxShadow:
-                  'inset -1px -1px 0px #c0c0c0, inset 1px 1px 0px #ffffff',
-              }}
-            >
-              <div className="text-lg font-bold mb-4">
+      {gameState.gamePhase === 'finished' && gameState.winner && (
+        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div
+            className="bg-white border-4 border-black p-8 max-w-md w-full mx-4"
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              boxShadow:
+                'inset -4px -4px 0px #c0c0c0, inset 4px 4px 0px #ffffff, 8px 8px 0px #808080',
+            }}
+          >
+            <div className="text-center">
+              <div className="text-2xl mb-6">
                 🏆{' '}
-                {gameState.winner === myCharacter.id ? 'YOU WIN!' : 'YOU LOSE!'}{' '}
-                🏆
+                {getSpeciesName(
+                  gameState.winner === myCharacter.id
+                    ? myCharacter.species
+                    : enemyCharacter.species
+                ).toUpperCase()}{' '}
+                WINS! 🏆
               </div>
-              <div className="text-xs mb-4">
+
+              <div className="text-sm mb-2">
+                {gameState.winner === myCharacter.id ? 'VICTORY!' : 'DEFEAT!'}
+              </div>
+
+              <div className="text-xs mb-6 text-gray-600">
                 Battle completed in {gameState.turnNumber} turns!
               </div>
-            </div>
-            <div className="space-y-3">
-              <button
-                className="w-full border-2 border-black p-4 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
-                style={{
-                  fontFamily: "'Press Start 2P', monospace",
-                  fontSize: '9px',
-                  boxShadow:
-                    'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
-                }}
-                onClick={() => (window.location.href = '/')}
-              >
-                🆕 NEW BATTLE
-              </button>
-              <button
-                className="w-full border-2 border-black p-4 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
-                style={{
-                  fontFamily: "'Press Start 2P', monospace",
-                  fontSize: '9px',
-                  boxShadow:
-                    'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
-                }}
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: 'Nature Brawl Victory!',
-                      url: window.location.href,
-                    });
-                  } else {
-                    navigator.clipboard.writeText(window.location.href);
-                  }
-                }}
-              >
-                📤 SHARE BATTLE
-              </button>
+
+              <div className="space-y-4">
+                <button
+                  className="w-full border-2 border-black p-4 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
+                  style={{
+                    fontFamily: "'Press Start 2P', monospace",
+                    fontSize: '10px',
+                    boxShadow:
+                      'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
+                  }}
+                  onClick={() => (window.location.href = '/')}
+                >
+                  🆕 NEW BATTLE
+                </button>
+                <button
+                  className="w-full border-2 border-black p-4 cursor-pointer transition-all duration-150 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1"
+                  style={{
+                    fontFamily: "'Press Start 2P', monospace",
+                    fontSize: '10px',
+                    boxShadow:
+                      'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
+                  }}
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'Nature Brawl Victory!',
+                        url: window.location.href,
+                      });
+                    } else {
+                      navigator.clipboard.writeText(window.location.href);
+                    }
+                  }}
+                >
+                  📤 SHARE BATTLE
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Battle Controls */}
-      {!isVictoryScreenVisible && (
+      {/* Battle Controls - Hidden when game is finished */}
+      {gameState.gamePhase !== 'finished' && (
         <div className="space-y-4">
           {/* Attack Menu */}
           <div
