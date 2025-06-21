@@ -1,0 +1,457 @@
+---
+import { db, brawls } from '../../lib/db';
+import { eq } from 'drizzle-orm';
+import '../../styles/global.css';
+import { SPECIES, getSpeciesEmoji, getSpeciesName } from '../../lib/species';
+import SpeciesCard from '../../components/SpeciesCard.astro';
+import BattleInterface from '../../components/BattleInterface';
+
+const { slug } = Astro.params;
+
+if (!slug) {
+  return Astro.redirect('/');
+}
+
+// Get the brawl and its characters with their attacks
+const brawl = await db.query.brawls.findFirst({
+  where: eq(brawls.slug, slug),
+  with: {
+    characters: {
+      with: {
+        attacks: true,
+      },
+    },
+  },
+});
+
+if (!brawl) {
+  return Astro.redirect('/');
+}
+
+const challengerCharacter = brawl.characters[0];
+const challengeeCharacter = brawl.characters[1];
+const isWaitingForChallengee = brawl.characters.length === 1;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Nature Brawl - {slug}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+      /* 8-bit Pokemon style */
+      .pokemon-container {
+        font-family: 'Press Start 2P', monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        image-rendering: pixelated;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+      }
+
+      .pokemon-border {
+        border: 4px solid #000;
+        border-image: repeating-linear-gradient(
+            0deg,
+            #000 0px,
+            #000 4px,
+            transparent 4px,
+            transparent 8px
+          )
+          4;
+        background: linear-gradient(135deg, #f8f8f8 0%, #e8e8e8 100%);
+        box-shadow:
+          inset -2px -2px 0px #c0c0c0,
+          inset 2px 2px 0px #ffffff,
+          4px 4px 0px #808080;
+      }
+
+      .pokemon-window {
+        background: #f8f8f8;
+        border: 2px solid #000;
+        border-image: repeating-linear-gradient(
+            0deg,
+            #000 0px,
+            #000 2px,
+            transparent 2px,
+            transparent 4px
+          )
+          2;
+        box-shadow:
+          inset -1px -1px 0px #c0c0c0,
+          inset 1px 1px 0px #ffffff;
+      }
+
+      .menu-button {
+        background: linear-gradient(145deg, #f0f0f0, #e0e0e0);
+        border: 2px solid #000;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 11px;
+        padding: 16px 24px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        box-shadow:
+          inset -2px -2px 0px #c0c0c0,
+          inset 2px 2px 0px #ffffff,
+          2px 2px 0px #808080;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .menu-button:hover:not(:disabled) {
+        background: linear-gradient(145deg, #e8e8e8, #d8d8d8);
+        transform: translate(1px, 1px);
+        box-shadow:
+          inset -1px -1px 0px #a0a0a0,
+          inset 1px 1px 0px #ffffff,
+          1px 1px 0px #808080;
+      }
+
+      .menu-button:active:not(:disabled) {
+        background: linear-gradient(145deg, #d0d0d0, #c8c8c8);
+        transform: translate(2px, 2px);
+        box-shadow:
+          inset -1px -1px 0px #808080,
+          inset 1px 1px 0px #f0f0f0;
+      }
+
+      .menu-button:disabled {
+        background: #c0c0c0;
+        color: #808080;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .menu-button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.4),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      .menu-button:hover:not(:disabled)::before {
+        left: 100%;
+      }
+
+      /* Title screen styling */
+      .title-screen {
+        background: linear-gradient(
+          135deg,
+          #4a90e2 0%,
+          #357abd 50%,
+          #1e5f99 100%
+        );
+        min-height: 100vh;
+        position: relative;
+      }
+
+      .title-screen::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background:
+          radial-gradient(
+            circle at 20% 30%,
+            rgba(255, 255, 255, 0.1) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(255, 255, 255, 0.05) 0%,
+            transparent 50%
+          );
+      }
+
+      .title-logo {
+        text-shadow:
+          2px 2px 0px #000,
+          -2px -2px 0px #000,
+          2px -2px 0px #000,
+          -2px 2px 0px #000,
+          4px 4px 8px rgba(0, 0, 0, 0.5);
+        animation: titlePulse 3s ease-in-out infinite;
+      }
+
+      @keyframes titlePulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.02);
+        }
+      }
+
+      /* Character selection styling */
+      .character-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+
+      /* Fighter card styling */
+      .fighter-card {
+        background: linear-gradient(135deg, #f8f8f8 0%, #e8e8e8 100%);
+        border: 2px solid #000;
+        box-shadow:
+          inset -1px -1px 0px #c0c0c0,
+          inset 1px 1px 0px #ffffff,
+          2px 2px 0px #808080;
+        transition: all 0.15s ease;
+      }
+
+      .fighter-card.selected {
+        border-color: #ff6b35;
+        box-shadow:
+          inset -1px -1px 0px #c0c0c0,
+          inset 1px 1px 0px #ffffff,
+          2px 2px 0px #ff6b35;
+      }
+
+      .fighter-card:hover:not(.disabled) {
+        transform: translate(1px, 1px);
+        box-shadow:
+          inset -1px -1px 0px #a0a0a0,
+          inset 1px 1px 0px #ffffff,
+          1px 1px 0px #808080;
+      }
+
+      .fighter-card.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .vs-text {
+        text-shadow:
+          1px 1px 0px #000,
+          -1px -1px 0px #000,
+          1px -1px 0px #000,
+          -1px 1px 0px #000;
+      }
+
+      /* Copy link input styling */
+      .copy-input {
+        background: #f8f8f8;
+        border: 2px solid #000;
+        box-shadow:
+          inset -1px -1px 0px #c0c0c0,
+          inset 1px 1px 0px #ffffff;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 10px;
+        padding: 8px 12px;
+      }
+    </style>
+  </head>
+  <body class="title-screen pokemon-container">
+    <div class="container mx-auto px-4 py-8 relative z-10">
+      <div class="text-center mb-8">
+        <h1 class="title-logo text-4xl font-bold text-white mb-4">
+          🌿 NATURE BRAWL 🥊
+        </h1>
+        <div class="pokemon-window inline-block px-4 py-2">
+          <p class="text-xs text-black font-bold">CHALLENGE: {slug.toUpperCase()}</p>
+        </div>
+      </div>
+
+      <div class="max-w-4xl mx-auto">
+        <div class="pokemon-border p-8 relative z-10">
+          
+          {isWaitingForChallengee ? (
+            <!-- Waiting for challenger -->
+            <div class="text-center">
+              <div class="pokemon-window p-6 mb-6">
+                <h2 class="text-lg font-bold text-black mb-6">🎯 CHALLENGE CREATED!</h2>
+                
+                <div class="flex justify-center items-center mb-6 flex-wrap gap-4">
+                  <div class="fighter-card p-4 text-center">
+                    <div class="text-4xl mb-2">{getSpeciesEmoji(challengerCharacter.species)}</div>
+                    <h3 class="text-xs font-bold text-black">{getSpeciesName(challengerCharacter.species)}</h3>
+                    <p class="text-xs text-gray-600">CHALLENGER</p>
+                  </div>
+                  
+                  <div class="mx-4 text-2xl text-black vs-text">VS</div>
+                  
+                  <div class="fighter-card p-4 text-center bg-gray-200">
+                    <div class="text-4xl mb-2">❓</div>
+                    <h3 class="text-xs font-bold text-gray-500">WAITING...</h3>
+                    <p class="text-xs text-gray-500">FOR OPPONENT</p>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <p class="text-sm text-black">Share this link to challenge someone:</p>
+                  <div class="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      id="challenge-link" 
+                      value={`${Astro.url.origin}/fight/${slug}`}
+                      readonly
+                      class="copy-input flex-1 text-xs"
+                    />
+                    <button 
+                      id="copy-link-btn"
+                      class="menu-button text-xs px-3 py-2"
+                    >
+                      📋 COPY
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="pokemon-window p-6">
+                <h3 class="text-sm font-bold text-black mb-4">⚔️ ACCEPT THE CHALLENGE</h3>
+                <p class="text-xs text-black mb-6">Choose your fighter to accept this challenge:</p>
+                
+                <div class="character-grid mb-6">
+                  {SPECIES.map(species => (
+                                         <div 
+                       class={`fighter-card p-3 text-center cursor-pointer ${species.id === challengerCharacter.species ? 'disabled' : 'species-card'}`}
+                       data-species={species.id}
+                     >
+                       <div class="text-3xl mb-2">{species.emoji}</div>
+                       <h4 class="text-xs font-bold text-black">{species.name}</h4>
+                       <p class="text-xs text-gray-600">{species.id.toUpperCase()}</p>
+                       {species.id === challengerCharacter.species && (
+                         <p class="text-xs text-red-600 mt-1">TAKEN</p>
+                       )}
+                     </div>
+                  ))}
+                </div>
+                
+                <button 
+                  id="accept-challenge-btn"
+                  class="menu-button disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled
+                >
+                  ⚔️ ACCEPT CHALLENGE
+                </button>
+              </div>
+            </div>
+          ) : (
+            <!-- React Battle Interface -->
+            <BattleInterface 
+              client:load
+              slug={slug}
+              initialGameState={{
+                player1: challengerCharacter,
+                player2: challengeeCharacter,
+                currentPlayer: brawl.currentPlayerId || challengerCharacter.id,
+                gamePhase: brawl.gamePhase || 'active',
+                turnNumber: brawl.turnNumber || 1,
+                winner: brawl.winner
+              }}
+              myCharacterId="BROWSER_DETERMINED"
+              browserId="BROWSER_DETERMINED"
+              currentImageUrl={brawl.currentImageUrl}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+
+    <script define:vars={{ slug, isWaitingForChallengee }}>
+      // Get browser ID for authentication
+      function getBrowserId() {
+        let browserId = localStorage.getItem('naturebrawl.browserId');
+        if (!browserId) {
+          browserId = 'browser_' + Math.random().toString(36).substr(2, 9);
+          localStorage.setItem('naturebrawl.browserId', browserId);
+        }
+        return browserId;
+      }
+
+      // Copy link functionality for challenge page
+      if (isWaitingForChallengee) {
+        const copyBtn = document.getElementById('copy-link-btn');
+        const linkInput = document.getElementById('challenge-link');
+        
+        if (copyBtn && linkInput) {
+          copyBtn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(linkInput.value);
+              copyBtn.textContent = 'Copied!';
+              setTimeout(() => {
+                copyBtn.textContent = 'Copy';
+              }, 2000);
+            } catch (err) {
+              // Fallback for older browsers
+              linkInput.select();
+              document.execCommand('copy');
+              copyBtn.textContent = 'Copied!';
+              setTimeout(() => {
+                copyBtn.textContent = 'Copy';
+              }, 2000);
+            }
+          });
+        }
+
+        // Challenge acceptance functionality
+        let selectedSpecies = null;
+        
+        const speciesCards = document.querySelectorAll('.species-card:not(.disabled)');
+        const acceptBtn = document.getElementById('accept-challenge-btn');
+        
+        speciesCards.forEach(card => {
+          card.addEventListener('click', () => {
+            speciesCards.forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            selectedSpecies = card.dataset.species;
+            acceptBtn.disabled = false;
+          });
+        });
+        
+        if (acceptBtn) {
+          acceptBtn.addEventListener('click', async () => {
+            if (!selectedSpecies) return;
+            
+            acceptBtn.disabled = true;
+            acceptBtn.textContent = 'Joining Battle...';
+            
+            try {
+              const response = await fetch(`/api/brawls/${slug}/join`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  species: selectedSpecies,
+                  browserId: getBrowserId(),
+                }),
+              });
+              
+              if (response.ok) {
+                window.location.reload();
+              } else {
+                const error = await response.json();
+                alert(`Failed to join battle: ${error.error}`);
+                acceptBtn.disabled = false;
+                acceptBtn.textContent = 'Accept Challenge! ⚔️';
+              }
+            } catch (error) {
+              console.error('Error joining battle:', error);
+              alert('Failed to join battle. Please try again.');
+              acceptBtn.disabled = false;
+              acceptBtn.textContent = 'Accept Challenge! ⚔️';
+            }
+          });
+        }
+      }
+    </script>
+  </body>
+</html> 

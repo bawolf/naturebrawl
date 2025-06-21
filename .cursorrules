@@ -1,0 +1,95 @@
+# Nature Brawl – Project Rules
+
+## Overview
+
+You are working on **Nature Brawl**, a 2-D, turn-based fighting game that combines live game logic with AI-generated imagery. Keep every suggestion, code edit, and architectural decision aligned with the rules below.
+
+## Tech Stack
+
+1. **Frontend**
+   • Astro (SSR) with Vite as the build tool  
+   • TypeScript everywhere  
+   • Tailwind CSS for styling (no other CSS frameworks)  
+   • Prefer island architecture; keep shipped JavaScript minimal
+2. **Backend**
+   • Node 20 with TypeScript  
+   • Use a lightweight HTTP framework (e.g. Fastify)  
+   • Provide Server-Sent Events (SSE) endpoints for real-time battle updates  
+   • PostgreSQL as the primary database (access through Drizzle ORM)
+3. **Image Pipeline**
+   • Generate action images with the Flux _Kontext_ model  
+   • Persist images in Google Cloud Storage (bucket name via `GCS_BUCKET`)
+4. **Deployment**
+   • Deploy to Fly.io; applications must be stateless, configuration via env vars
+5. **Tooling**
+   • yarn workspaces  
+   • ESLint + Prettier with TypeScript strict  
+   • Vitest for unit tests, Playwright for E2E
+
+## Gameplay Rules (Logic)
+
+• Each fight is a best-of-one duel between two characters.  
+• On their turn a player selects one attack from their move-set.  
+• The engine resolves **hit / miss / crit** and calculates damage.  
+• After each turn emit an SSE message `{ type: "turn", data: { … } }` and kick off image generation.  
+• When a fighter's HP ≤ 0, emit `{ type: "finished", winnerId }` and generate a _victory_ image (ref raises winner's hand).  
+• Store fight state in Postgres tables `fights`, `turns`, `participants`.  
+• Use a short, URL-safe slug (`fight_slug`) to serve a shareable page `/fight/[slug]`.  
+• Persist `fightId` in `localStorage` under the key `naturebrawl.history` to support account-less history.
+
+## Coding Guidelines
+
+• Use **functional, composable** modules; avoid monolithic files.  
+• Keep all Reactivity/UI state inside Astro components; prefer stores over prop-drilling.  
+• Organise code:
+
+```
+apps/web          # Astro front-end
+apps/api          # Fastify server
+packages/db       # Prisma schema & client
+packages/shared   # Types & utility code
+```
+
+• Always add TypeScript return types, even for arrow functions.  
+• Do not commit secrets; expect everything to come from `.env` or Fly.io secrets.
+
+## Environment Variables
+
+```
+DATABASE_URL
+FLUX_API_KEY
+GCS_BUCKET
+GCS_KEYFILE
+SITE_URL       # e.g. https://naturebrawl.fly.dev
+```
+
+## Conventions
+
+• Use **Conventional Commits**.  
+• Keep pull requests small (< 500 LOC) and focused.  
+• Write tests for every non-trivial game mechanic.  
+• Document exported functions with JSDoc.
+
+## Agent Workflows
+
+1. When asked to _start the dev server_, run:
+   `yarn install && yarn dev` (apps/web + apps/api concurrently).
+2. When adding a dependency, update the shared `package.json` and run `yarn workspace <pkg> add …`.
+3. Use `yarn lint --fix` before proposing edits.
+
+## Helpful Snippets
+
+```ts
+// Fetch SSE stream
+const events = new EventSource(`/api/fights/${slug}/stream`);
+```
+
+```ts
+// Generate image with Flux Kontext
+await axios.post('https://api.flux.run/generate', {
+  prompt,
+  seed,
+});
+```
+
+End of Rules
