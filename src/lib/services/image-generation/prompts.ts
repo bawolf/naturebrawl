@@ -2,6 +2,8 @@ import type { Character } from '../../db/schema';
 import type { AttackResult } from '../../game/engine';
 import { getSpeciesName } from '../../species';
 
+const background = `The background is a San Francisco style fighting game background, dramatic lighting, colorful art style similar to Street Fighter or King of Fighters, high quality digital art.`;
+
 /**
  * Generate initial fight scene prompt
  */
@@ -10,8 +12,10 @@ export function generateInitialScenePrompt(
   location: string
 ): string {
   const [char1, char2] = characters;
+  const char1Name = getSpeciesName(char1.species);
+  const char2Name = getSpeciesName(char2.species);
 
-  return `A dynamic 2D fighting game scene in ${location}. Two anthropomorphic creatures face each other in combat stance: a ${char1.species} (left side, full health, energetic pose) and a ${char2.species} (right side, full health, ready to fight). Urban environment background, dramatic lighting, colorful art style similar to Street Fighter or King of Fighters, high quality digital art.`;
+  return `A dynamic 2D fighting game scene in ${location}. Two anthropomorphic creatures face each other in combat stance: a ${char1Name} on the left side with full health in an energetic ready pose, and a ${char2Name} on the right side with full health in a defensive fighting stance. Both characters should be clearly visible and well-positioned. ${background}`;
 }
 
 /**
@@ -23,36 +27,27 @@ export function buildAttackModification(
   defender: Character
 ): string {
   const { attackUsed, damage, isCritical, isHit } = attackResult;
+  const attackerName = getSpeciesName(attacker.species);
+  const defenderName = getSpeciesName(defender.species);
 
-  let modification = `Modify the current image so that the ${attacker.species} is using "${attackUsed.name}" move. `;
+  let modification = `Change the ${attackerName} to be attack like "${attackUsed.name}"`;
 
   if (isHit) {
-    modification += `The move connects successfully! `;
+    modification += `Add impact effects where the ${attackerName} hits the ${defenderName}. `;
     if (isCritical) {
-      modification += `Amazing critical hit with spectacular effects and bright impact sparks! `;
-    }
-    modification += `The ${defender.species} is affected by the move. `;
-
-    // Add condition details based on remaining health (using game-friendly terms)
-    const healthPercentage = (defender.health / defender.maxHealth) * 100;
-    if (healthPercentage <= 25) {
-      modification += `The ${defender.species} looks very tired and is breathing heavily, showing signs of fatigue. `;
-    } else if (healthPercentage <= 50) {
-      modification += `The ${defender.species} appears somewhat tired and is working harder to maintain stance. `;
-    } else if (healthPercentage <= 75) {
-      modification += `The ${defender.species} looks slightly tired but remains determined and focused. `;
+      modification += `Add bright critical hit sparks. `;
     }
   } else {
-    modification += `The move misses! The ${defender.species} successfully dodges or blocks with great agility. `;
+    modification += `Show the ${defenderName} dodging the attack. `;
   }
 
-  // Add energy state for attacker
-  const energyPercentage = (attacker.energy / attacker.maxEnergy) * 100;
-  if (energyPercentage <= 30) {
-    modification += `The ${attacker.species} appears tired after using the move. `;
+  // Show damage state if significant
+  const defenderHealthPercent = (defender.health / defender.maxHealth) * 100;
+  if (defenderHealthPercent <= 25) {
+    modification += `Make the ${defenderName} look battle-worn. `;
   }
 
-  modification += `Colorful cartoon fighting game scene with dynamic poses and action effects. Keep the same background and lighting.`;
+  modification += `Maintain the same composition, camera angle, lighting, and background.`;
 
   return modification;
 }
@@ -67,5 +62,5 @@ export function buildVictoryModification(
   const winnerName = getSpeciesName(winner.species);
   const loserName = getSpeciesName(loser.species);
 
-  return `Victory scene! The ${winnerName} has won the battle and stands triumphantly in the center. A referee (human in black and white striped shirt) is standing next to the ${winnerName} and raising the winner's arm/paw high in the air in classic victory pose. The ${loserName} is sitting/lying down in the background, looking tired but respectful of the victory. Bright celebratory lighting, confetti or sparkles in the air, victory celebration atmosphere. Colorful cartoon fighting game victory screen style, similar to Street Fighter or Mortal Kombat victory poses.`;
+  return `Change the ${winnerName} to a victory pose with arms raised. Add a referee raising the ${winnerName}'s arm. Change the ${loserName} to sit on the ground looking defeated. Add confetti falling. Maintain the same composition, lighting, and background.`;
 }

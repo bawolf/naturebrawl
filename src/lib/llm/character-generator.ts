@@ -38,7 +38,7 @@ const AttackSchema = z.object({
     .number()
     .min(10)
     .max(50)
-    .describe('Energy cost to use this attack (10-50)'),
+    .describe('Energy cost to use this attack (10-30)'),
   damage: z
     .number()
     .min(15)

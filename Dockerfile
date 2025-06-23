@@ -45,6 +45,7 @@ COPY --from=build /app/dist /app/dist
 
 ENV PORT=4321
 ENV HOST=0.0.0.0
+ENV NODE_ENV=production
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 4321

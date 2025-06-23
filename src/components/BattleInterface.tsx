@@ -518,7 +518,7 @@ export default function BattleInterface({
 
       {/* Victory Screen */}
       {gameState.gamePhase === 'finished' && gameState.winner && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
+        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 z-50">
           <div
             className="bg-white border-4 border-black px-6 py-4"
             style={{

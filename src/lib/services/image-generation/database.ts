@@ -61,6 +61,19 @@ export async function updateBrawlCurrentImage(
 }
 
 /**
+ * Update brawl's initial image URL (only set once)
+ */
+export async function updateBrawlInitialImage(
+  brawlId: string,
+  imageUrl: string
+): Promise<void> {
+  await db
+    .update(brawls)
+    .set({ initialImageUrl: imageUrl })
+    .where(eq(brawls.id, brawlId));
+}
+
+/**
  * Get image generation by Replicate ID
  */
 export async function getImageGenerationByReplicateId(replicateId: string) {

@@ -65,11 +65,11 @@ export async function createAttackScenePrediction(
   const prediction = await getReplicate().predictions.create({
     model: FLUX_KONTEXT_CONFIG.model,
     input: {
-      image_url: previousImageUrl, // Correct parameter name for Kontext
+      input_image: previousImageUrl,
       prompt: modification,
       guidance_scale: 3.5,
       output_format: 'jpg',
-      aspect_ratio: '4:3', // Maintain consistent aspect ratio
+      // Removed aspect_ratio to preserve original image dimensions
     },
     webhook: webhookUrl,
     webhook_events_filter: ['completed'],

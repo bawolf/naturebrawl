@@ -14,6 +14,7 @@ import {
   createImageGeneration,
   updateImageGeneration,
   updateBrawlCurrentImage,
+  updateBrawlInitialImage,
   getImageGenerationByReplicateId,
 } from './database';
 
@@ -93,6 +94,7 @@ export async function generateAttackScene(
 
     return generationId;
   } catch (error) {
+    console.error('Error generating attack scene:', error);
     await updateImageGeneration(generationId, {
       status: 'failed',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
@@ -142,6 +144,11 @@ export async function handleReplicateWebhook(
 
       // Update brawl's current image
       await updateBrawlCurrentImage(generation.brawlId, publicUrl);
+
+      // Set initial image URL if this is the initial scene (turn 0)
+      if (generation.turnNumber === 0) {
+        await updateBrawlInitialImage(generation.brawlId, publicUrl);
+      }
 
       // Broadcast image update to connected clients if function provided
       if (broadcastUpdate) {
@@ -225,6 +232,7 @@ export async function generateVictoryImage(
 
     return generationId;
   } catch (error) {
+    console.error('Error generating victory image:', error);
     await updateImageGeneration(generationId, {
       status: 'failed',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',

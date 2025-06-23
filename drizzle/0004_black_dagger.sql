@@ -1,0 +1,1 @@
+ALTER TABLE "brawls" ADD COLUMN "initial_image_url" text;

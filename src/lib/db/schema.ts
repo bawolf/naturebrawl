@@ -12,6 +12,7 @@ export const brawls = pgTable('brawls', {
   currentPlayerId: text('current_player_id'), // character id whose turn it is
   turnNumber: integer('turn_number').notNull().default(1),
   currentImageUrl: text('current_image_url'), // URL of the current scene image
+  initialImageUrl: text('initial_image_url'), // URL of the initial scene image (never changes)
   location: text('location').notNull().default('San Francisco'), // Fight location
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

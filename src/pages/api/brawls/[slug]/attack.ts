@@ -73,6 +73,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       });
     }
 
+    console.log('Brawl currentImageUrl:', brawl.currentImageUrl); // Debug log
+
     // Verify the character belongs to the requesting browser
     const character = brawl.characters.find((c) => c.id === characterId);
     if (!character || character.browserId !== browserId) {
@@ -131,7 +133,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       .where(eq(brawls.id, brawl.id));
 
     // Generate appropriate image based on game state
-    if (gameState.brawl.currentImageUrl) {
+    if (brawl.currentImageUrl) {
       try {
         const attacker = gameState.brawl.characters.find(
           (c) => c.id === attackResult.attackerId
@@ -148,27 +150,27 @@ export const POST: APIRoute = async ({ params, request }) => {
               brawl.id,
               attacker, // Winner is the attacker who landed the final blow
               defender, // Loser is the defender who was defeated
-              gameState.brawl.currentImageUrl
+              brawl.currentImageUrl
             );
-            console.log('Victory scene generation started');
           } else {
-            // Generate regular attack scene
+            // Generate attack scene
             console.log('Generating attack scene image...');
             await generateAttackScene(
               brawl.id,
-              gameState.currentTurn,
+              gameState.brawl.turnNumber,
               attackResult,
               attacker,
               defender,
-              gameState.brawl.currentImageUrl
+              brawl.currentImageUrl
             );
-            console.log('Attack scene generation started');
           }
         }
       } catch (error) {
-        console.error('Failed to start image generation:', error);
-        // Don't fail the attack if image generation fails
+        console.error('Error generating image:', error);
+        // Continue without failing the entire request
       }
+    } else {
+      console.log('No currentImageUrl available, skipping image generation');
     }
 
     // Broadcast the attack result to all connected clients
