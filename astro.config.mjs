@@ -14,6 +14,8 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     server: {
+      host: '0.0.0.0',
+      port: 4321,
       // Allow ngrok hosts with wildcard pattern
       allowedHosts: ['.ngrok-free.app', '.ngrok.app', '.ngrok.io'],
     },

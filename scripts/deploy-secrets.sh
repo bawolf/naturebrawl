@@ -27,19 +27,19 @@ SERVICE_ACCOUNT_JSON=$(cat .gcp/service-account.json | tr -d '\n' | tr -d ' ')
 # Set secrets
 echo "🔐 Setting Fly.io secrets..."
 
-# Required secrets - you'll need to update these values
-read -p "Enter your Replicate API token: " REPLICATE_TOKEN
-read -p "Enter your production database URL: " DATABASE_URL
-read -p "Enter your Fly.io app name (for SITE_URL): " FLY_APP_NAME
+# # Required secrets - you'll need to update these values
+# read -p "Enter your Replicate API token: " REPLICATE_TOKEN
+# read -p "Enter your production database URL: " DATABASE_URL
+# read -p "Enter your Fly.io app name (for SITE_URL): " FLY_APP_NAME
 
 # Set all secrets
-fly secrets set \
-  REPLICATE_API_TOKEN="$REPLICATE_TOKEN" \
-  DATABASE_URL="$DATABASE_URL" \
-  GCS_BUCKET="naturebrawl-images" \
-  GCS_PROJECT_ID="shining-camp-362017" \
-  GCS_SERVICE_ACCOUNT_JSON="$SERVICE_ACCOUNT_JSON" \
-  SITE_URL="https://${FLY_APP_NAME}.fly.dev"
+fly secrets set GCS_SERVICE_ACCOUNT_JSON="$SERVICE_ACCOUNT_JSON"
+  # REPLICATE_API_TOKEN="$REPLICATE_TOKEN" \
+  # DATABASE_URL="$DATABASE_URL" \
+  # GCS_BUCKET="naturebrawl-images" \
+  # GCS_PROJECT_ID="shining-camp-362017" \
+  # GCS_SERVICE_ACCOUNT_JSON="$SERVICE_ACCOUNT_JSON" \
+  # SITE_URL="https://${FLY_APP_NAME}.fly.dev"
 
 echo "✅ Secrets deployed successfully!"
 echo ""

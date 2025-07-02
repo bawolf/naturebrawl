@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { handleReplicateWebhook } from '../../lib/services/image-generation';
-import { broadcastBrawlUpdate } from './brawls/[slug]/stream';
+import { broadcastToFight } from './brawls/[slug]/stream';
 
 export const prerender = false;
 
@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Process the webhook with broadcast function for dependency injection
-    await handleReplicateWebhook(replicateId, body, broadcastBrawlUpdate);
+    await handleReplicateWebhook(replicateId, body, broadcastToFight);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

@@ -1,3 +1,11 @@
+/**
+ * Template-based prompt generation (Legacy)
+ *
+ * This file contains the original template-based prompt generation functions.
+ * For better, more vivid prompts, use the LLM-based functions in llm-prompts.ts.
+ * These functions are kept as fallbacks when OpenAI is not available.
+ */
+
 import type { Character } from '../../db/schema';
 import type { AttackResult } from '../../game/engine';
 import { getSpeciesName } from '../../species';
@@ -20,6 +28,8 @@ export function generateInitialScenePrompt(
 
 /**
  * Build modification prompt for attack scene
+ * @deprecated Use generateAttackSceneModification from llm-prompts.ts for better, LLM-generated prompts
+ * This function is kept as a fallback when LLM is not available
  */
 export function buildAttackModification(
   attackResult: AttackResult,
@@ -54,6 +64,8 @@ export function buildAttackModification(
 
 /**
  * Generate victory scene modification prompt
+ * @deprecated Use generateVictorySceneModification from llm-prompts.ts for better, LLM-generated prompts
+ * This function is kept as a fallback when LLM is not available
  */
 export function buildVictoryModification(
   winner: Character,

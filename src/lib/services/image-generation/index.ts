@@ -6,6 +6,10 @@ import {
   buildVictoryModification,
 } from './prompts';
 import {
+  generateAttackSceneModification,
+  generateVictorySceneModification,
+} from './llm-prompts';
+import {
   createInitialScenePrediction,
   createAttackScenePrediction,
 } from './replicate';
@@ -65,9 +69,9 @@ export async function generateAttackScene(
   attackResult: AttackResult,
   attacker: Character,
   defender: Character,
-  previousImageUrl: string
+  initialImageUrl: string
 ): Promise<string> {
-  const modification = buildAttackModification(
+  const modification = await generateAttackSceneModification(
     attackResult,
     attacker,
     defender
@@ -77,13 +81,13 @@ export async function generateAttackScene(
     brawlId,
     turnNumber,
     modification,
-    inputImageUrl: previousImageUrl,
+    inputImageUrl: initialImageUrl,
     status: 'pending',
   });
 
   try {
     const replicateId = await createAttackScenePrediction(
-      previousImageUrl,
+      initialImageUrl,
       modification
     );
 
@@ -203,7 +207,7 @@ export async function generateVictoryImage(
   loser: Character,
   previousImageUrl?: string
 ): Promise<string> {
-  const modification = buildVictoryModification(winner, loser);
+  const modification = await generateVictorySceneModification(winner, loser);
 
   const generationId = await createImageGeneration({
     brawlId,

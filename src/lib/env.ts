@@ -4,14 +4,18 @@
  * In production (Fly.io): uses process.env
  */
 export function getEnvVar(key: string): string | undefined {
-  // Try import.meta.env first (Astro dev mode)
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env[key];
+  // In production (Node.js), always use process.env
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
   }
 
-  // Fallback to process.env (Node.js production)
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env[key];
+  // In development (Vite/Astro), use import.meta.env
+  if (
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env[key]
+  ) {
+    return import.meta.env[key];
   }
 
   return undefined;

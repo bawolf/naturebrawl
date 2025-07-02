@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSpeciesName } from '../lib/species';
+import { SSEClient } from '../lib/sse-client';
 
 interface Character {
   id: string;
@@ -43,6 +44,37 @@ interface BattleInterfaceProps {
   browserId: string; // Can be "BROWSER_DETERMINED" to determine from localStorage
   currentImageUrl?: string;
 }
+
+interface HealthBarProps {
+  label: string;
+  current: number;
+  max: number;
+  isEnemy?: boolean;
+}
+
+const HealthBar: React.FC<HealthBarProps> = ({
+  label,
+  current,
+  max,
+  isEnemy = false,
+}) => (
+  <div
+    className={`w-full md:w-5/12 p-2 bg-gray-200 border-2 border-black rounded-lg shadow-md ${isEnemy ? 'text-right' : ''}`}
+  >
+    <div className="flex justify-between items-center mb-1">
+      <span className="text-xs font-bold text-black">{label}</span>
+      <span className="text-xs text-black">
+        {current} / {max} HP
+      </span>
+    </div>
+    <div className="w-full bg-gray-400 rounded-full h-4 border border-black overflow-hidden">
+      <div
+        className="bg-green-500 h-full transition-all duration-500"
+        style={{ width: `${Math.max(0, (current / max) * 100)}%` }}
+      ></div>
+    </div>
+  </div>
+);
 
 export default function BattleInterface({
   slug,
@@ -89,7 +121,8 @@ export default function BattleInterface({
   const [processingAttackId, setProcessingAttackId] = useState<string | null>(
     null
   );
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Derived state
@@ -104,7 +137,9 @@ export default function BattleInterface({
       : gameState.player1
     : null;
   const isPlayer1Me = myCharacter?.id === gameState?.player1.id;
-  const isMyTurn = gameState?.currentPlayer === myCharacterId;
+  const isMyTurn = isHydrated
+    ? gameState?.currentPlayer === myCharacterId
+    : false;
 
   // Layout classes based on player position
   const layoutClasses = {
@@ -115,6 +150,11 @@ export default function BattleInterface({
     turnIndicator: 'top-4 right-4',
     currentPlayerIndicator: 'top-4 left-4',
   };
+
+  // Set hydrated state on mount to fix hydration issues
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   // Load battle events from database on mount
   useEffect(() => {
@@ -167,45 +207,43 @@ export default function BattleInterface({
   useEffect(() => {
     if (!slug) return;
 
-    const eventSource = new EventSource(`/api/brawls/${slug}/stream`);
-    eventSourceRef.current = eventSource;
+    console.log('BattleInterface: Setting up SSE connection for fight:', slug);
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('SSE Message received:', data);
+    const client = new SSEClient(slug);
 
-        switch (data.type) {
-          case 'brawl_update':
-            if (data.event === 'challenge_accepted') {
-              window.location.reload();
-            }
-            break;
-          case 'attack_result':
-            handleAttackResult(data.attackResult, data.gameState);
-            break;
-          case 'image_updated':
-            handleImageUpdate(data.imageUrl, data.turnNumber);
-            break;
-          case 'image_failed':
-            console.warn('Image generation failed:', data.error);
-            addBattleMessage(
-              `⚠️ Image generation failed: ${data.error}`,
-              'warning'
-            );
-            break;
-        }
-      } catch (error) {
-        console.error('Error parsing SSE message:', error);
-      }
+    const handleChallengeAccepted = () => {
+      window.location.reload();
     };
 
-    eventSource.onerror = (event) => {
-      console.error('SSE connection error:', event);
+    const handleAttackResultEvent = (data: any) => {
+      handleAttackResult(data.attackResult, data.gameState);
     };
+
+    const handleImageUpdated = (data: any) => {
+      handleImageUpdate(data.imageUrl, data.turnNumber);
+    };
+
+    const handleImageFailed = (data: any) => {
+      console.warn('Image generation failed:', data.error);
+      addBattleMessage(`⚠️ Image generation failed: ${data.error}`, 'warning');
+    };
+
+    // Subscribe to events
+    client.on('challenge_accepted', handleChallengeAccepted);
+    client.on('attack_result', handleAttackResultEvent);
+    client.on('image_updated', handleImageUpdated);
+    client.on('image_failed', handleImageFailed);
+
+    // Start the connection
+    client.connect();
 
     return () => {
-      eventSource.close();
+      console.log('BattleInterface: Cleaning up SSE connection');
+      client.off('challenge_accepted', handleChallengeAccepted);
+      client.off('attack_result', handleAttackResultEvent);
+      client.off('image_updated', handleImageUpdated);
+      client.off('image_failed', handleImageFailed);
+      client.disconnect();
     };
   }, [slug]);
 
@@ -336,7 +374,7 @@ export default function BattleInterface({
 
   return (
     <div
-      className="border-4 border-black bg-gradient-to-br from-gray-100 to-gray-200 shadow-lg"
+      className="border-4 border-black bg-gradient-to-br from-gray-100 to-gray-200 shadow-lg text-black flex flex-col"
       style={{
         fontFamily: "'Press Start 2P', monospace",
         fontSize: '12px',
@@ -347,17 +385,17 @@ export default function BattleInterface({
       }}
     >
       {/* Fight Scene Image with Overlays */}
-      <div className="relative mb-4">
-        <div className="relative">
+      <div className="relative">
+        <div className="relative w-full aspect-[4/3]">
           {currentImageUrl ? (
             <img
               id="fight-scene-image"
               src={currentImageUrl}
               alt="Fight scene"
-              className="w-full h-80 object-cover pixel-perfect pokemon-window"
+              className="w-full h-full object-cover pixel-perfect pokemon-window"
             />
           ) : (
-            <div className="w-full h-80 pokemon-window bg-gray-300 flex items-center justify-center">
+            <div className="w-full h-full object-cover pixel-perfect pokemon-window bg-gray-300 flex items-center justify-center">
               <div className="text-center">
                 <div className="text-2xl mb-2">⚡</div>
                 <p className="text-black font-bold">Loading Battle...</p>
@@ -501,7 +539,9 @@ export default function BattleInterface({
                 }}
               >
                 <div className="text-xs font-bold">
-                  {isMyTurn ? (
+                  {!isHydrated ? (
+                    <span className="text-gray-600">⏳ LOADING...</span>
+                  ) : isMyTurn ? (
                     <span className="text-green-600">🎯 YOUR TURN!</span>
                   ) : (
                     <span className="text-red-600">
@@ -589,7 +629,7 @@ export default function BattleInterface({
 
       {/* Battle Controls - Hidden when game is finished */}
       {gameState.gamePhase !== 'finished' && (
-        <div className="space-y-4">
+        <div className="space-y-4 flex-shrink-0">
           {/* Attack Menu */}
           <div
             className="bg-gray-100 border-4 border-black p-4"

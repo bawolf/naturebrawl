@@ -1,167 +1,126 @@
 import type { APIRoute } from 'astro';
-import { db, brawls } from '../../../../lib/db';
-import { eq } from 'drizzle-orm';
+
+// Simple in-memory store for SSE connections
+interface SSEConnection {
+  controller: ReadableStreamDefaultController;
+  id: string;
+  send: (data: any) => void;
+}
+
+const connections = new Map<string, Set<SSEConnection>>();
 
 export const prerender = false;
 
-// Store active connections for each brawl
-const connections = new Map<string, Set<WritableStreamDefaultWriter>>();
-
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const { slug } = params;
 
   if (!slug) {
-    return new Response('Slug is required', { status: 400 });
+    return new Response('Slug required', { status: 400 });
   }
 
-  // Verify the brawl exists
-  const brawl = await db.query.brawls.findFirst({
-    where: eq(brawls.slug, slug),
-    with: {
-      characters: true,
-    },
+  // Set up SSE headers
+  const headers = new Headers({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control',
   });
-
-  if (!brawl) {
-    return new Response('Brawl not found', { status: 404 });
-  }
 
   // Create a readable stream for SSE
   const stream = new ReadableStream({
     start(controller) {
-      const encoder = new TextEncoder();
-
-      // Send initial connection message
-      const initialMessage = `data: ${JSON.stringify({
-        type: 'connected',
-        timestamp: new Date().toISOString(),
-        brawl: {
-          id: brawl.id,
-          slug: brawl.slug,
-          characterCount: brawl.characters.length,
-        },
-      })}\n\n`;
-
-      controller.enqueue(encoder.encode(initialMessage));
-
-      // Store the controller for this brawl
+      // Add this connection to the fight room
       if (!connections.has(slug)) {
         connections.set(slug, new Set());
       }
 
-      // We'll use the controller as our "writer" for simplicity
-      const writer = {
-        write: (data: string) => {
+      const fightConnections = connections.get(slug)!;
+
+      // Create a response object to track this connection
+      const connectionId = Math.random().toString(36);
+      const connection = {
+        controller,
+        id: connectionId,
+        send: (data: any) => {
           try {
-            controller.enqueue(encoder.encode(data));
+            const message = `data: ${JSON.stringify(data)}\n\n`;
+            controller.enqueue(new TextEncoder().encode(message));
           } catch (error) {
-            console.log('Client disconnected:', error);
-            // Remove from connections when client disconnects
-            const brawlConnections = connections.get(slug);
-            if (brawlConnections) {
-              brawlConnections.delete(writer as any);
-              if (brawlConnections.size === 0) {
-                connections.delete(slug);
-              }
-            }
-          }
-        },
-        close: () => {
-          try {
-            controller.close();
-          } catch (error) {
-            // Already closed
+            console.error('Error sending SSE message:', error);
+            // Remove broken connection
+            fightConnections.delete(connection);
           }
         },
       };
 
-      connections.get(slug)!.add(writer as any);
+      fightConnections.add(connection);
 
-      // Send periodic heartbeat to keep connection alive
-      const heartbeat = setInterval(() => {
+      console.log(
+        `SSE client connected to fight ${slug}. Total connections: ${fightConnections.size}`
+      );
+
+      // Send initial connection message
+      connection.send({
+        type: 'connected',
+        timestamp: new Date().toISOString(),
+        connectionId,
+      });
+
+      // Handle connection cleanup
+      request.signal.addEventListener('abort', () => {
+        console.log(`SSE client disconnected from fight ${slug}`);
+        fightConnections.delete(connection);
+
+        if (fightConnections.size === 0) {
+          connections.delete(slug);
+        }
+
         try {
-          const heartbeatMessage = `data: ${JSON.stringify({
-            type: 'heartbeat',
-            timestamp: new Date().toISOString(),
-          })}\n\n`;
-
-          controller.enqueue(encoder.encode(heartbeatMessage));
+          controller.close();
         } catch (error) {
-          clearInterval(heartbeat);
-          // Remove from connections when client disconnects
-          const brawlConnections = connections.get(slug);
-          if (brawlConnections) {
-            brawlConnections.delete(writer as any);
-            if (brawlConnections.size === 0) {
-              connections.delete(slug);
-            }
-          }
+          // Connection already closed
         }
-      }, 30000); // Every 30 seconds
-
-      // Clean up on close
-      return () => {
-        clearInterval(heartbeat);
-        const brawlConnections = connections.get(slug);
-        if (brawlConnections) {
-          brawlConnections.delete(writer as any);
-          if (brawlConnections.size === 0) {
-            connections.delete(slug);
-          }
-        }
-      };
+      });
     },
   });
 
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control',
-    },
-  });
+  return new Response(stream, { headers });
 };
 
-// Helper function to broadcast updates to all connected clients for a brawl
-export function broadcastBrawlUpdate(slug: string, data: any): void {
-  const brawlConnections = connections.get(slug);
-  if (!brawlConnections || brawlConnections.size === 0) {
+/**
+ * Broadcast a message to all SSE connections for a specific fight
+ */
+export function broadcastToFight(slug: string, data: any): void {
+  const fightConnections = connections.get(slug);
+
+  if (!fightConnections || fightConnections.size === 0) {
+    console.log(`No SSE connections for fight ${slug}`);
     return;
   }
 
-  const message = `data: ${JSON.stringify({
-    type: 'brawl_update',
-    timestamp: new Date().toISOString(),
-    ...data,
-  })}\n\n`;
+  console.log(
+    `Broadcasting to ${fightConnections.size} SSE connections for fight ${slug}`
+  );
 
-  // Create a copy of the connections to iterate over
-  const connectionsToRemove: any[] = [];
+  // Send to all connections, remove any that fail
+  const failedConnections = new Set<SSEConnection>();
 
-  // Send to all connected clients for this brawl
-  brawlConnections.forEach((writer: any) => {
+  for (const connection of fightConnections) {
     try {
-      writer.write(message);
+      connection.send(data);
     } catch (error) {
-      console.log(
-        'Client disconnected during broadcast:',
-        error instanceof Error ? error.message : String(error)
-      );
-      // Mark for removal instead of removing during iteration
-      connectionsToRemove.push(writer);
+      console.error('Failed to send to SSE connection:', error);
+      failedConnections.add(connection);
     }
-  });
+  }
 
-  // Remove failed connections
-  connectionsToRemove.forEach((writer) => {
-    brawlConnections.delete(writer);
-  });
+  // Clean up failed connections
+  for (const failed of failedConnections) {
+    fightConnections.delete(failed);
+  }
 
-  // Clean up empty connection sets
-  if (brawlConnections.size === 0) {
+  if (fightConnections.size === 0) {
     connections.delete(slug);
   }
 }

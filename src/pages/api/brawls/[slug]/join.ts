@@ -7,7 +7,7 @@ import {
   getSpeciesName,
   getSpeciesEmoji,
 } from '../../../../lib/species';
-import { broadcastBrawlUpdate } from './stream';
+import { broadcastToFight } from './stream';
 import { generateCharacterStats } from '../../../../lib/llm/character-generator';
 import { generateInitialFightScene } from '../../../../lib/services/image-generation';
 import { storeBattleEvent } from '../../../../lib/db/helpers';
@@ -134,8 +134,8 @@ export const POST: APIRoute = async ({ request, params }) => {
     }
 
     // Broadcast the update to all connected clients
-    broadcastBrawlUpdate(slug, {
-      event: 'challenge_accepted',
+    broadcastToFight(slug, {
+      type: 'challenge_accepted',
       challenger: {
         species: challengerCharacter.species,
         name: getSpeciesName(challengerCharacter.species),

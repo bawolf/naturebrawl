@@ -69,6 +69,8 @@ export async function createAttackScenePrediction(
       prompt: modification,
       guidance_scale: 3.5,
       output_format: 'jpg',
+      disable_safety_checker: true,
+      safety_tolerance: 6,
       // Removed aspect_ratio to preserve original image dimensions
     },
     webhook: webhookUrl,

@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+body {
+  @apply bg-gray-900 text-white;
+}
+
+h1,
+h2,
+h3 {
+  @apply font-bold;
+}
+
+/* Global theme styles */
+.pokemon-container {
+  font-family: 'Press Start 2P', monospace;
+}
+
+.pokemon-border {
+  border: 4px solid #000;
+  background: linear-gradient(135deg, #f8f8f8 0%, #e8e8e8 100%);
+  box-shadow:
+    inset -2px -2px 0px #c0c0c0,
+    inset 2px 2px 0px #ffffff,
+    4px 4px 0px #808080;
+}
+
+.pokemon-window {
+  background: #f8f8f8;
+  border: 2px solid #000;
+  box-shadow:
+    inset -1px -1px 0px #c0c0c0,
+    inset 1px 1px 0px #ffffff;
+}
+
+.title-screen {
+  background: linear-gradient(
+    135deg,
+    #4a90e2 0%,
+    #357abd 50%,
+    #1e5f99 100%
+  );
+  min-height: 100vh;
+}
+
+.title-logo {
+  text-shadow:
+    2px 2px 0px #000,
+    -2px -2px 0px #000,
+    2px -2px 0px #000,
+    -2px 2px 0px #000,
+    4px 4px 8px rgba(0, 0, 0, 0.5);
+}

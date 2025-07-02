@@ -1,11 +1,16 @@
-import type { Brawl, Character, Attack } from '../db/schema';
+import type {
+  Brawl as DbBrawl,
+  Character as DbCharacter,
+  Attack as DbAttack,
+} from '../db/schema';
+
+// Re-exporting and extending types for game logic
+export type Attack = DbAttack;
+export type Character = DbCharacter & { attacks: Attack[] };
+export type Brawl = DbBrawl & { characters: Character[] };
 
 export interface GameState {
-  brawl: Brawl & {
-    characters: (Character & {
-      attacks: Attack[];
-    })[];
-  };
+  brawl: Brawl;
   currentTurn: number;
   gamePhase: 'waiting' | 'active' | 'finished';
   winner?: string;
@@ -269,25 +274,12 @@ export class GameEngine {
 /**
  * Create a new game engine from a brawl
  */
-export function createGameEngine(
-  brawl: Brawl & {
-    characters: (Character & {
-      attacks: Attack[];
-    })[];
-  }
-): GameEngine {
-  // Determine game phase
+export function createGameEngine(brawl: Brawl): GameEngine {
   let gamePhase: 'waiting' | 'active' | 'finished' = 'waiting';
-
   if (brawl.winnerId) {
     gamePhase = 'finished';
   } else if (brawl.characters.length === 2) {
     gamePhase = 'active';
-  }
-
-  // If game is active but no current player is set, set it to the first player (challenger)
-  if (gamePhase === 'active' && !brawl.currentPlayerId) {
-    brawl.currentPlayerId = brawl.characters[0].id;
   }
 
   const gameState: GameState = {

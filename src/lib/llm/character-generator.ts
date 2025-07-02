@@ -1,28 +1,5 @@
-import Instructor from '@instructor-ai/instructor';
-import OpenAI from 'openai';
 import { z } from 'zod';
-import { getEnvVar } from '../env';
-
-// Check if we're in test environment
-const isTestEnvironment =
-  process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-
-// Initialize OpenAI client only if API key is available and not in test environment
-let openai: OpenAI | null = null;
-let instructor: any = null;
-
-const openaiApiKey = getEnvVar('OPENAI_API_KEY');
-if (openaiApiKey && !isTestEnvironment) {
-  openai = new OpenAI({
-    apiKey: openaiApiKey,
-  });
-
-  // Initialize Instructor
-  instructor = Instructor({
-    client: openai,
-    mode: 'FUNCTIONS',
-  });
-}
+import { getInstructorClient, isLLMAvailable, isTestEnv } from './client';
 
 // Define the attack schema
 const AttackSchema = z.object({
@@ -37,7 +14,7 @@ const AttackSchema = z.object({
   energyCost: z
     .number()
     .min(10)
-    .max(50)
+    .max(30)
     .describe('Energy cost to use this attack (10-30)'),
   damage: z
     .number()
@@ -75,7 +52,7 @@ export async function generateCharacterStats(
   species: string
 ): Promise<GeneratedCharacterStats> {
   // If in test environment, always use fallback stats (no LLM calls)
-  if (isTestEnvironment) {
+  if (isTestEnv()) {
     console.log(
       `Test environment detected, using fallback stats for ${species}`
     );
@@ -83,8 +60,8 @@ export async function generateCharacterStats(
   }
 
   // If no OpenAI API key or instructor is available, use fallback stats
-  if (!instructor || !openaiApiKey) {
-    console.log(`No OpenAI API key found, using fallback stats for ${species}`);
+  if (!isLLMAvailable()) {
+    console.log(`LLM not available, using fallback stats for ${species}`);
     return getFallbackStats(species);
   }
 
@@ -111,6 +88,7 @@ For a ${species}, consider:
 Make the character feel powerful but balanced for competitive gameplay.`;
 
   try {
+    const instructor = getInstructorClient();
     const response = await instructor.chat.completions.create({
       messages: [
         {

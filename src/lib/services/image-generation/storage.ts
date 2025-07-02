@@ -20,11 +20,21 @@ function getStorage(): Storage {
 
     if (serviceAccountJson) {
       // Production: Use service account JSON from environment variable
-      const credentials = JSON.parse(serviceAccountJson);
-      storageInstance = new Storage({
-        credentials,
-        projectId,
-      });
+      try {
+        // Fix common issue where private key headers lose spaces when set as env vars
+        const fixedJson = serviceAccountJson
+          .replace('-----BEGINPRIVATEKEY-----', '-----BEGIN PRIVATE KEY-----')
+          .replace('-----ENDPRIVATEKEY-----', '-----END PRIVATE KEY-----');
+
+        const credentials = JSON.parse(fixedJson);
+        storageInstance = new Storage({
+          credentials,
+          projectId,
+        });
+      } catch (error) {
+        console.error('Error parsing service account JSON:', error);
+        throw new Error(`Failed to parse GCS_SERVICE_ACCOUNT_JSON: ${error}`);
+      }
     } else if (keyFile) {
       // Development: Use service account key file
       storageInstance = new Storage({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GameEngine, createGameEngine } from '../src/lib/game/engine.js';
+import { createGameEngine } from '../src/lib/game/engine.js';
 
 describe('Game Engine', () => {
   // Mock brawl data
@@ -152,7 +152,7 @@ describe('Game Engine', () => {
     };
 
     const engine = createGameEngine(freshMockBrawl);
-    const initialState = engine.getGameState();
+    // const initialState = engine.getGameState();
 
     // Execute attack
     const result = engine.executeAttack('char_1', 'attack_1');

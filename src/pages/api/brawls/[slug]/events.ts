@@ -4,6 +4,10 @@ import { eq, desc } from 'drizzle-orm';
 
 export const prerender = false;
 
+/**
+ * REST endpoint to fetch battle events history for a fight
+ * This complements the real-time Socket.IO updates
+ */
 export const GET: APIRoute = async ({ params }) => {
   try {
     const { slug } = params;

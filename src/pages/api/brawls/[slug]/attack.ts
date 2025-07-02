@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { db, brawls, characters, attacks } from '../../../../lib/db';
 import { eq } from 'drizzle-orm';
 import { createGameEngine } from '../../../../lib/game/engine';
-import { broadcastBrawlUpdate } from './stream';
+import { broadcastToFight } from './stream';
 import {
   generateAttackScene,
   generateVictoryImage,
@@ -161,7 +161,7 @@ export const POST: APIRoute = async ({ params, request }) => {
               attackResult,
               attacker,
               defender,
-              brawl.currentImageUrl
+              brawl.initialImageUrl || brawl.currentImageUrl
             );
           }
         }
@@ -174,7 +174,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
 
     // Broadcast the attack result to all connected clients
-    console.log('Broadcasting attack result via SSE...');
+    console.log('Broadcasting attack result via Socket.IO...');
     const battleSummary = gameEngine.getBattleSummary();
     console.log('Battle summary being broadcast:', {
       currentPlayer: battleSummary.currentPlayer,
@@ -182,7 +182,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       gamePhase: battleSummary.gamePhase,
     });
 
-    broadcastBrawlUpdate(slug, {
+    broadcastToFight(slug, {
       type: 'attack_result',
       attackResult,
       gameState: battleSummary,
