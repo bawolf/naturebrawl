@@ -47,20 +47,3 @@ All commands are run from the root of the project, from a terminal:
 Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
 
 # TODO
-
-- fix battle prompt
-- fix win prompt
-- loading screen for next image, pause action
-<!-- - image kontext-dev -->
-
-- ✅ what do when energy is out "rest" move
-- ✅ center animal choices
-- ✅ can't select animal that is selected
-- ✅ accept challenge shouldn't show up if you are the first user
-- characters are still flipped sometimes, the person who created the challenge should always be on the left and the person who accepted the challenge should always be on the right.!
-
-These do seem better! but the model might not be good enough
-
-The bear is in front of the lion, its claws extended forward, just making contact with the lion's side. The lion is leaning slightly to the side, with its eyes squinting and mouth open in a grimace of pain. The lion's legs are slightly bent as it begins to stagger back. The bear is steady, maintaining its stance after the attack, with its back paws firmly on the ground, while the lion is pushed back due to the impact. Blood is lightly visible from the lion's side where the claws made contact.
-
-The lion's mouth is clamped around the bear's shoulder, showing the fierce bite in action. The bear is leaning backward, with its eyes wide and mouth slightly open in response to the attack. The bear's front paws are slightly raised, and its body is pushed back to emphasize the impact of the bite. The lion is positioned slightly above the bear and facing it directly, showcasing dominance during the attack.
