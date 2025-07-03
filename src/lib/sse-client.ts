@@ -7,6 +7,7 @@ export class SSEClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private isDisconnecting = false;
 
   constructor(private fightSlug: string) {}
 
@@ -15,7 +16,12 @@ export class SSEClient {
    */
   connect(): void {
     if (this.eventSource) {
-      console.log('SSE already connected');
+      console.log('SSE already connected to', this.fightSlug);
+      return;
+    }
+
+    if (this.isDisconnecting) {
+      console.log('SSE is disconnecting, cannot connect');
       return;
     }
 
@@ -25,7 +31,7 @@ export class SSEClient {
     this.eventSource = new EventSource(url);
 
     this.eventSource.onopen = () => {
-      console.log('SSE connection opened');
+      console.log('SSE connection opened for', this.fightSlug);
       this.reconnectAttempts = 0;
       this.emit('connection', { status: 'connected' });
     };
@@ -33,7 +39,11 @@ export class SSEClient {
     this.eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('SSE message received:', data);
+
+        // Don't log ping messages to reduce noise
+        if (data.type !== 'ping') {
+          console.log('SSE message received for', this.fightSlug, ':', data);
+        }
 
         if (data.type) {
           this.emit(data.type, data);
@@ -45,12 +55,14 @@ export class SSEClient {
     };
 
     this.eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
+      console.error('SSE connection error for', this.fightSlug, ':', error);
       this.emit('connection', { status: 'error', error });
 
       if (this.eventSource?.readyState === EventSource.CLOSED) {
         this.eventSource = null;
-        this.attemptReconnect();
+        if (!this.isDisconnecting) {
+          this.attemptReconnect();
+        }
       }
     };
   }
@@ -59,13 +71,21 @@ export class SSEClient {
    * Disconnect from the SSE stream
    */
   disconnect(): void {
+    console.log('Disconnecting SSE for', this.fightSlug);
+    this.isDisconnecting = true;
+
     if (this.eventSource) {
-      console.log('Disconnecting SSE');
       this.eventSource.close();
       this.eventSource = null;
     }
+
     this.listeners.clear();
     this.reconnectAttempts = 0;
+
+    // Reset disconnecting flag after a short delay
+    setTimeout(() => {
+      this.isDisconnecting = false;
+    }, 500);
   }
 
   /**
@@ -111,8 +131,13 @@ export class SSEClient {
    * Attempt to reconnect with exponential backoff
    */
   private attemptReconnect(): void {
+    if (this.isDisconnecting) {
+      console.log('Not reconnecting - client is disconnecting');
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
+      console.error('Max reconnection attempts reached for', this.fightSlug);
       this.emit('connection', { status: 'failed' });
       return;
     }
@@ -121,7 +146,7 @@ export class SSEClient {
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
     console.log(
-      `Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`
+      `Attempting to reconnect to ${this.fightSlug} in ${delay}ms (attempt ${this.reconnectAttempts})`
     );
     this.emit('connection', {
       status: 'reconnecting',
@@ -129,7 +154,9 @@ export class SSEClient {
     });
 
     setTimeout(() => {
-      this.connect();
+      if (!this.isDisconnecting) {
+        this.connect();
+      }
     }, delay);
   }
 

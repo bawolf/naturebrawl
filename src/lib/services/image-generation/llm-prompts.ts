@@ -22,8 +22,6 @@ const SceneModificationSchema = z.object({
     ),
 });
 
-type SceneModification = z.infer<typeof SceneModificationSchema>;
-
 /**
  * Generate LLM-powered attack scene modification prompt
  */
@@ -38,7 +36,7 @@ export async function generateAttackSceneModification(
     return generateFallbackAttackModification(attackResult, attacker, defender);
   }
 
-  const { attackUsed, damage, isCritical, isHit } = attackResult;
+  const { attackUsed, isCritical, isHit } = attackResult;
   const attackerName = getSpeciesName(attacker.species);
   const defenderName = getSpeciesName(defender.species);
 
@@ -63,7 +61,6 @@ ATTACK DETAILS:
 - Attack Used: "${attackUsed.name}" (${attackUsed.description || 'a powerful combat move'})
 - Attack Hit: ${isHit ? 'YES' : 'NO'}
 - Critical Hit: ${isCritical ? 'YES' : 'NO'}
-- Damage Dealt: ${damage}
 - Defender's Condition: ${healthStatus}
 
 TASK: Tell me exactly what I should see at the moment of maximum impact for this attack. Think of it like freeze-framing a fighting game right when the attack connects (or misses).
@@ -223,7 +220,7 @@ function generateFallbackAttackModification(
   attacker: Character,
   defender: Character
 ): string {
-  const { attackUsed, damage, isCritical, isHit } = attackResult;
+  const { attackUsed, isCritical, isHit } = attackResult;
   const attackerName = getSpeciesName(attacker.species);
   const defenderName = getSpeciesName(defender.species);
 

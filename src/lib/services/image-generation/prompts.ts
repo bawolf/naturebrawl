@@ -14,16 +14,18 @@ const background = `The background is a San Francisco style fighting game backgr
 
 /**
  * Generate initial fight scene prompt
+ * Note: characters[0] is always the challenger, characters[1] is always the challengee
+ * We establish consistent positioning: challenger on LEFT, challengee on RIGHT
  */
 export function generateInitialScenePrompt(
   characters: Character[],
   location: string
 ): string {
-  const [char1, char2] = characters;
-  const char1Name = getSpeciesName(char1.species);
-  const char2Name = getSpeciesName(char2.species);
+  const [challenger, challengee] = characters;
+  const challengerName = getSpeciesName(challenger.species);
+  const challengeeName = getSpeciesName(challengee.species);
 
-  return `A dynamic 2D fighting game scene in ${location}. Two anthropomorphic creatures face each other in combat stance: a ${char1Name} on the left side with full health in an energetic ready pose, and a ${char2Name} on the right side with full health in a defensive fighting stance. Both characters should be clearly visible and well-positioned. ${background}`;
+  return `A dynamic 2D fighting game scene in ${location}. Two creatures face each other in combat stance: a ${challengerName} on the left side with full health in an energetic ready pose (this is the CHALLENGER), and a ${challengeeName} on the right side with full health in a defensive fighting stance (this is the CHALLENGEE). Both characters should be clearly visible and well-positioned with the challenger always on the left and challengee always on the right. ${background}. there should not be health bars, or UI elements, no game interfaces, no text overlays.`;
 }
 
 /**
@@ -36,7 +38,7 @@ export function buildAttackModification(
   attacker: Character,
   defender: Character
 ): string {
-  const { attackUsed, damage, isCritical, isHit } = attackResult;
+  const { attackUsed, isCritical, isHit } = attackResult;
   const attackerName = getSpeciesName(attacker.species);
   const defenderName = getSpeciesName(defender.species);
 

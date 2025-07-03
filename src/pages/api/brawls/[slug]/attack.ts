@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { db, brawls, characters, attacks } from '../../../../lib/db';
+import { db, brawls, characters } from '../../../../lib/db';
 import { eq } from 'drizzle-orm';
 import { createGameEngine } from '../../../../lib/game/engine';
 import { broadcastToFight } from './stream';
@@ -59,6 +59,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       where: eq(brawls.slug, slug),
       with: {
         characters: {
+          orderBy: (characters, { asc }) => [asc(characters.createdAt)], // Challenger created first
           with: {
             attacks: true,
           },
@@ -144,13 +145,13 @@ export const POST: APIRoute = async ({ params, request }) => {
 
         if (attacker && defender) {
           if (attackResult.gameOver) {
-            // Generate victory scene
+            // Generate victory scene based on initial image for consistency
             console.log('Generating victory scene image...');
             await generateVictoryImage(
               brawl.id,
               attacker, // Winner is the attacker who landed the final blow
               defender, // Loser is the defender who was defeated
-              brawl.currentImageUrl
+              brawl.initialImageUrl || brawl.currentImageUrl
             );
           } else {
             // Generate attack scene

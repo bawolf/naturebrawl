@@ -1,13 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import BattleInterface from './BattleInterface';
 import { SSEClient } from '../lib/sse-client';
-import type {
-  GameState as EngineGameState,
-  Brawl,
-  Character,
-  Attack,
-} from '../lib/game/engine';
+import type { Brawl, Character } from '../lib/game/engine';
 import { SPECIES, getSpeciesEmoji, getSpeciesName } from '../lib/species';
+import SpeciesSelectionTile from './SpeciesSelectionTile';
+
+// Custom hook for browser ID management
+const useBrowserId = () => {
+  const [browserId, setBrowserId] = useState<string>('');
+
+  useEffect(() => {
+    let id = localStorage.getItem('naturebrawl.browserId');
+    if (!id) {
+      id = 'browser_' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem('naturebrawl.browserId', id);
+    }
+    setBrowserId(id);
+  }, []);
+
+  return browserId;
+};
+
+// Custom hook for character ID determination
+const useMyCharacter = (brawl: Brawl, browserId: string) => {
+  return brawl.characters.find((char) => char.browserId === browserId) || null;
+};
 
 // This is a UI-specific version of GameState, which might differ slightly
 // from the engine's internal state representation. For now, they are similar.
@@ -35,22 +52,45 @@ const FightPage: React.FC<FightPageProps> = ({
   browserId,
 }) => {
   const [isWaiting, setIsWaiting] = useState(initialIsWaiting);
+  const [currentBrawl, setCurrentBrawl] = useState(brawl);
+  const [sseClient, setSseClient] = useState<SSEClient | null>(null);
 
+  // Use centralized browser ID management
+  const actualBrowserId = useBrowserId();
+  const myCharacter = useMyCharacter(currentBrawl, actualBrowserId);
+
+  // Single SSE connection for the entire fight lifecycle
   useEffect(() => {
-    if (!isWaiting) return;
-
     console.log('FightPage: Setting up SSE connection for fight:', slug);
 
     const client = new SSEClient(slug);
+    setSseClient(client);
 
     // Set up event listeners
     const handleConnection = (data: any) => {
-      console.log('Connection status changed:', data);
+      console.log('Fight connection status changed:', data);
     };
 
     const handleChallengeAccepted = (data: any) => {
-      console.log('Challenge accepted event received! Reloading page...');
-      window.location.reload();
+      console.log('Challenge accepted! Transitioning to battle state...');
+
+      // Update the brawl state with the new characters
+      if (data.challenger && data.challengee) {
+        setCurrentBrawl((prevBrawl) => {
+          const updatedBrawl = {
+            ...prevBrawl,
+            characters: [data.challenger, data.challengee],
+            currentPlayerId: data.challenger.id, // Ensure challenger goes first
+          };
+
+          console.log('FightPage: Challenge accepted - characters updated');
+
+          return updatedBrawl;
+        });
+      }
+
+      setIsWaiting(false);
+      // No page reload needed - just update state
     };
 
     client.on('connection', handleConnection);
@@ -59,48 +99,52 @@ const FightPage: React.FC<FightPageProps> = ({
     // Start the connection
     client.connect();
 
-    // Cleanup on unmount
+    // Cleanup on unmount only
     return () => {
       console.log('FightPage: Cleaning up SSE connection');
       client.off('connection', handleConnection);
       client.off('challenge_accepted', handleChallengeAccepted);
       client.disconnect();
+      setSseClient(null);
     };
-  }, [slug, isWaiting]);
+  }, [slug]); // Only depend on slug, not isWaiting
 
   if (isWaiting) {
-    const isChallenger = brawl.characters[0]?.browserId === browserId;
+    const isChallenger = myCharacter?.id === currentBrawl.characters[0]?.id;
+
     return (
       <Lobby
         slug={slug}
-        challenger={brawl.characters[0]}
+        challenger={currentBrawl.characters[0]}
         isCurrentUserChallenger={isChallenger}
       />
     );
   }
 
   // This check ensures we don't proceed to the BattleInterface without a full brawl
-  if (brawl.characters.length < 2) {
+  if (currentBrawl.characters.length < 2) {
     return <div>Waiting for opponent to load...</div>;
   }
 
   const initialGameState: GameState = {
-    player1: brawl.characters[0],
-    player2: brawl.characters[1],
-    currentPlayer: brawl.currentPlayerId || brawl.characters[0].id,
-    gamePhase: brawl.winnerId ? 'finished' : 'active',
-    turnNumber: brawl.turnNumber || 1,
-    winner: brawl.winnerId || null,
-    brawl: brawl,
+    player1: currentBrawl.characters[0],
+    player2: currentBrawl.characters[1],
+    currentPlayer:
+      currentBrawl.currentPlayerId || currentBrawl.characters[0].id,
+    gamePhase: currentBrawl.winnerId ? 'finished' : 'active',
+    turnNumber: currentBrawl.turnNumber || 1,
+    winner: currentBrawl.winnerId || null,
+    brawl: currentBrawl,
   };
 
   return (
     <BattleInterface
       slug={slug}
       initialGameState={initialGameState}
-      myCharacterId="BROWSER_DETERMINED"
-      browserId="BROWSER_DETERMINED"
-      currentImageUrl={brawl.currentImageUrl || undefined}
+      myCharacterId={myCharacter?.id || ''}
+      browserId={actualBrowserId}
+      currentImageUrl={currentBrawl.currentImageUrl || undefined}
+      sseClient={sseClient}
     />
   );
 };
@@ -168,11 +212,15 @@ const Lobby: React.FC<LobbyProps> = ({
     if (linkInputRef.current) {
       try {
         linkInputRef.current.select();
-        document.execCommand('copy');
-        // Deselect the text
-        window.getSelection()?.removeAllRanges();
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const successful = document.execCommand('copy');
+        if (successful) {
+          // Deselect the text
+          window.getSelection()?.removeAllRanges();
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } else {
+          throw new Error('Copy command failed');
+        }
       } catch (err) {
         console.error('Failed to copy using fallback method:', err);
         alert(
@@ -272,23 +320,19 @@ const Lobby: React.FC<LobbyProps> = ({
             <p className="text-sm text-black mb-4">
               🥊 Ready to accept the challenge? Choose your fighter:
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
-              {SPECIES.map((species) => (
-                <button
-                  key={species.id}
-                  onClick={() => setSelectedSpecies(species.id)}
-                  className={`p-3 text-center border-2 border-black transition-all duration-150 ${
-                    selectedSpecies === species.id
-                      ? 'bg-blue-200 shadow-[inset_-1px_-1px_0px_#808080,inset_1px_1px_0px_#f0f0f0]'
-                      : 'bg-gradient-to-br from-[#f8f8f8] to-[#e8e8e8] shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff,2px_2px_0px_#808080] hover:bg-gradient-to-br hover:from-gray-200 hover:to-gray-300'
-                  }`}
-                >
-                  <div className="text-2xl mb-1">{species.emoji}</div>
-                  <div className="text-xs font-bold text-black">
-                    {species.name}
-                  </div>
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-3 mb-6 justify-center">
+              {SPECIES.map((species) => {
+                const isDisabled = species.id === challenger.species;
+                return (
+                  <SpeciesSelectionTile
+                    key={species.id}
+                    species={species}
+                    isDisabled={isDisabled}
+                    isSelected={selectedSpecies === species.id}
+                    onSelect={() => setSelectedSpecies(species.id)}
+                  />
+                );
+              })}
             </div>
             <button
               onClick={handleAcceptChallenge}

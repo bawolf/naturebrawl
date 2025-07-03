@@ -4,10 +4,43 @@ import type { APIRoute } from 'astro';
 interface SSEConnection {
   controller: ReadableStreamDefaultController;
   id: string;
+  connected: boolean;
   send: (data: any) => void;
 }
 
 const connections = new Map<string, Set<SSEConnection>>();
+
+// Periodic cleanup of stale connections
+const CLEANUP_INTERVAL = 30000; // 30 seconds
+const cleanupTimer = setInterval(() => {
+  console.log('Running SSE connection cleanup...');
+  let totalCleaned = 0;
+
+  for (const [slug, fightConnections] of connections.entries()) {
+    const staleConnections = new Set<SSEConnection>();
+
+    for (const connection of fightConnections) {
+      if (!connection.connected) {
+        staleConnections.add(connection);
+      }
+    }
+
+    // Remove stale connections
+    for (const stale of staleConnections) {
+      fightConnections.delete(stale);
+      totalCleaned++;
+    }
+
+    // Remove empty fight rooms
+    if (fightConnections.size === 0) {
+      connections.delete(slug);
+    }
+  }
+
+  if (totalCleaned > 0) {
+    console.log(`Cleaned up ${totalCleaned} stale SSE connections`);
+  }
+}, CLEANUP_INTERVAL);
 
 export const prerender = false;
 
@@ -39,17 +72,33 @@ export const GET: APIRoute = async ({ params, request }) => {
 
       // Create a response object to track this connection
       const connectionId = Math.random().toString(36);
-      const connection = {
+      const connection: SSEConnection = {
         controller,
         id: connectionId,
+        connected: true,
         send: (data: any) => {
+          // Check if connection is still valid before sending
+          if (!connection.connected) {
+            return;
+          }
+
           try {
             const message = `data: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(new TextEncoder().encode(message));
           } catch (error) {
-            console.error('Error sending SSE message:', error);
-            // Remove broken connection
+            // Connection is closed or invalid, mark as disconnected
+            console.log(
+              `SSE connection ${connectionId} closed/failed, removing from ${slug}`
+            );
+            connection.connected = false;
+            clearInterval(pingInterval);
             fightConnections.delete(connection);
+
+            if (fightConnections.size === 0) {
+              connections.delete(slug);
+            }
+
+            // Don't rethrow the error - this prevents crashing other connections
           }
         },
       };
@@ -67,9 +116,23 @@ export const GET: APIRoute = async ({ params, request }) => {
         connectionId,
       });
 
+      // Send periodic ping to detect stale connections
+      const pingInterval = setInterval(() => {
+        if (connection.connected) {
+          connection.send({
+            type: 'ping',
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 15000); // Ping every 15 seconds
+
       // Handle connection cleanup
-      request.signal.addEventListener('abort', () => {
+      const cleanup = () => {
         console.log(`SSE client disconnected from fight ${slug}`);
+        connection.connected = false;
+        clearInterval(pingInterval);
         fightConnections.delete(connection);
 
         if (fightConnections.size === 0) {
@@ -79,9 +142,16 @@ export const GET: APIRoute = async ({ params, request }) => {
         try {
           controller.close();
         } catch (error) {
-          // Connection already closed
+          // Connection already closed or other error - ignore
+          console.log(
+            'Controller cleanup error (expected):',
+            error instanceof Error ? error.message : 'Unknown error'
+          );
         }
-      });
+      };
+
+      // Listen for client disconnect
+      request.signal.addEventListener('abort', cleanup);
     },
   });
 
@@ -103,14 +173,21 @@ export function broadcastToFight(slug: string, data: any): void {
     `Broadcasting to ${fightConnections.size} SSE connections for fight ${slug}`
   );
 
-  // Send to all connections, remove any that fail
+  // Send to all active connections, remove any that fail
   const failedConnections = new Set<SSEConnection>();
 
   for (const connection of fightConnections) {
-    try {
-      connection.send(data);
-    } catch (error) {
-      console.error('Failed to send to SSE connection:', error);
+    if (!connection.connected) {
+      failedConnections.add(connection);
+      continue;
+    }
+
+    // Try to send to the connection
+    // The connection.send() method will handle marking itself as disconnected if it fails
+    connection.send(data);
+
+    // After sending, check if the connection marked itself as disconnected
+    if (!connection.connected) {
       failedConnections.add(connection);
     }
   }
@@ -123,4 +200,26 @@ export function broadcastToFight(slug: string, data: any): void {
   if (fightConnections.size === 0) {
     connections.delete(slug);
   }
+
+  console.log(`Successfully broadcast to ${fightConnections.size} connections`);
+}
+
+/**
+ * Get connection stats for debugging
+ */
+export function getConnectionStats() {
+  const stats: Record<string, number> = {};
+
+  for (const [slug, fightConnections] of connections.entries()) {
+    stats[slug] = fightConnections.size;
+  }
+
+  return {
+    totalFights: connections.size,
+    totalConnections: Array.from(connections.values()).reduce(
+      (sum, conns) => sum + conns.size,
+      0
+    ),
+    fightDetails: stats,
+  };
 }

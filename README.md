@@ -53,10 +53,11 @@ Feel free to check [our documentation](https://docs.astro.build) or jump into ou
 - loading screen for next image, pause action
 <!-- - image kontext-dev -->
 
-- what do when energy is out "rest" move
-- scene proportions changed to match image so the framing is correct
-- accept challenge shouldn't show up if you are the first user
-- cahracters are still flipped sometimes!
+- ✅ what do when energy is out "rest" move
+- ✅ center animal choices
+- ✅ can't select animal that is selected
+- ✅ accept challenge shouldn't show up if you are the first user
+- characters are still flipped sometimes, the person who created the challenge should always be on the left and the person who accepted the challenge should always be on the right.!
 
 These do seem better! but the model might not be good enough
 

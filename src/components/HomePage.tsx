@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SPECIES } from '../lib/species';
-import SpeciesCard from './SpeciesCard'; // Assuming SpeciesCard is converted to React or we'll adapt
+import SpeciesSelectionTile from './SpeciesSelectionTile'; // Importing the shared tile component
 
 const HomePage: React.FC = () => {
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
@@ -79,14 +79,14 @@ const HomePage: React.FC = () => {
   return (
     <div className="text-black">
       {/* Character Selection */}
-      <div className="pokemon-window p-6 mb-6">
+      <div className="p-6 mb-6 bg-gray-200 border-2 border-black shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff]">
         <h2 className="text-lg font-bold text-black text-center mb-6">
           CHOOSE YOUR FIGHTER
         </h2>
 
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6 justify-center">
           {SPECIES.map((species) => (
-            <SpeciesCard
+            <SpeciesSelectionTile
               key={species.id}
               species={species}
               isSelected={selectedSpecies === species.id}
@@ -111,14 +111,14 @@ const HomePage: React.FC = () => {
 
       {/* Battle History */}
       {showHistory && (
-        <div className="pokemon-window p-6 mb-6">
+        <div className="p-6 mb-6 bg-gray-200 border-2 border-black shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff]">
           <h3 className="text-sm font-bold text-black mb-4">RECENT BATTLES</h3>
           <div className="space-y-2">
             {battleHistory.length > 0 ? (
               battleHistory.map((slug) => (
                 <div
                   key={slug}
-                  className="p-3 bg-gray-100 border-2 border-black cursor-pointer hover:bg-gray-200"
+                  className="p-3 bg-gray-100 border-2 border-black cursor-pointer hover:bg-gray-200 shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff,2px_2px_0px_#808080] hover:shadow-[inset_-1px_-1px_0px_#a0a0a0,inset_1px_1px_0px_#ffffff,1px_1px_0px_#808080]"
                   onClick={() => (window.location.href = `/fight/${slug}`)}
                 >
                   <div className="flex justify-between items-center">
@@ -140,7 +140,7 @@ const HomePage: React.FC = () => {
 
       {/* Rules Modal */}
       {showRules && (
-        <div className="pokemon-window p-6 mb-6">
+        <div className="p-6 mb-6 bg-gray-200 border-2 border-black shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff]">
           <h3 className="text-sm font-bold text-black mb-4">HOW TO PLAY</h3>
           <div className="text-xs text-black space-y-2">
             <p>• Choose your fighter and create a challenge</p>

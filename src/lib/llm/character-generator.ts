@@ -69,21 +69,39 @@ export async function generateCharacterStats(
 
 SPECIES: ${species.toUpperCase()}
 
+REQUIRED OUTPUT FORMAT:
+You MUST provide exactly 4 attacks, each with ALL of these fields:
+- name: The attack name (e.g., "Savage Claw")
+- description: Brief description of the attack (e.g., "Swift claw attack that tears through defenses")
+- energyCost: Energy cost (10-30)
+- damage: Base damage (15-40)
+- criticalHitChance: Critical hit percentage (5-25)
+
 GUIDELINES:
 - Stats should reflect the real-world characteristics of a ${species}
 - All stats are between 1-100, with most falling between 30-80 for balance
 - Health and Energy can be 80-120 for variety
 - Recovery should be low (2-6) to make energy management strategic
 - Each attack should feel authentic to the species
-- Energy costs should vary (10-50) with stronger attacks costing more
+- Energy costs should vary (10-30) with stronger attacks costing more
 - Damage should vary (15-40) with some attacks being stronger
 - Critical hit chances should vary (5-25%) based on attack type
+- EVERY attack MUST have a description explaining what it does
 
 For a ${species}, consider:
 - Physical traits (size, strength, speed, natural weapons)
 - Behavioral patterns (aggressive, defensive, cunning)
 - Natural abilities (claws, teeth, roar, stealth, etc.)
 - Fighting style that would be authentic
+
+Example attack format:
+{
+  "name": "Lightning Pounce",
+  "description": "Swift leap attack that catches enemies off guard",
+  "energyCost": 25,
+  "damage": 30,
+  "criticalHitChance": 18
+}
 
 Make the character feel powerful but balanced for competitive gameplay.`;
 
@@ -114,6 +132,23 @@ Make the character feel powerful but balanced for competitive gameplay.`;
       throw new Error('Invalid response: must have exactly 4 attacks');
     }
 
+    // Validate each attack has all required fields
+    for (let i = 0; i < response.attacks.length; i++) {
+      const attack = response.attacks[i];
+      if (
+        !attack.name ||
+        !attack.description ||
+        typeof attack.energyCost !== 'number' ||
+        typeof attack.damage !== 'number' ||
+        typeof attack.criticalHitChance !== 'number'
+      ) {
+        console.error(`Attack ${i} is missing required fields:`, attack);
+        throw new Error(
+          `Attack ${i} (${attack.name || 'unnamed'}) is missing required fields`
+        );
+      }
+    }
+
     console.log(`Generated stats for ${species}:`, {
       stats: {
         attack: response.attack,
@@ -125,8 +160,10 @@ Make the character feel powerful but balanced for competitive gameplay.`;
       },
       attacks: response.attacks.map((a: GeneratedAttack) => ({
         name: a.name,
+        description: a.description,
         energyCost: a.energyCost,
         damage: a.damage,
+        criticalHitChance: a.criticalHitChance,
       })),
     });
 

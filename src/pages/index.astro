@@ -15,25 +15,36 @@ import HomePage from '../components/HomePage';
       @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     </style>
   </head>
-  <body class="title-screen pokemon-container">
+  <body class="min-h-screen bg-gray-300 text-black pokemon-container">
     <div class="relative z-10">
       <div class="container mx-auto px-4 py-8">
         <!-- Title Screen -->
-        <div class="text-center mb-12">
-          <h1 class="title-logo text-6xl font-bold text-white mb-8">
-            🌿 NATURE BRAWL 🥊
-          </h1>
-          <div class="pokemon-window p-6 max-w-2xl mx-auto mb-8">
-            <p class="text-xs text-black">
-              Choose your wild fighter and challenge your friends to an epic
-              battle of nature's fiercest creatures!
-            </p>
+        <div class="text-center mb-8">
+          <div
+            class="p-6 mb-6 bg-[#f8f8f8] border-2 border-black shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff] max-w-4xl mx-auto"
+          >
+            <h1
+              class="text-4xl md:text-6xl font-bold text-black mb-6"
+              style="text-shadow: 1px 1px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000;"
+            >
+              🌿 NATURE BRAWL 🥊
+            </h1>
+            <div
+              class="p-4 bg-gray-200 border-2 border-black shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff] max-w-2xl mx-auto"
+            >
+              <p class="text-xs text-black">
+                Choose your wild fighter and challenge your friends to an epic
+                battle of nature's fiercest creatures!
+              </p>
+            </div>
           </div>
         </div>
 
         <!-- Main Menu -->
         <div class="max-w-4xl mx-auto">
-          <div class="pokemon-border p-8">
+          <div
+            class="p-6 bg-[#f8f8f8] border-2 border-black shadow-[inset_-1px_-1px_0px_#c0c0c0,inset_1px_1px_0px_#ffffff,2px_2px_0px_#808080]"
+          >
             <HomePage client:load />
           </div>
         </div>

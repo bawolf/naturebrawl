@@ -16,8 +16,9 @@ interface Character {
 interface Attack {
   id: string;
   name: string;
-  damage: number;
+  description: string;
   energyCost: number;
+  damage: number;
   criticalHitChance: number;
 }
 
@@ -27,7 +28,8 @@ interface GameState {
   currentPlayer: string;
   gamePhase: 'waiting' | 'active' | 'finished';
   turnNumber: number;
-  winner?: string | null;
+  winner: string | null;
+  brawl: any;
 }
 
 interface BattleMessage {
@@ -37,44 +39,21 @@ interface BattleMessage {
   timestamp: Date;
 }
 
+interface RestResult {
+  characterId: string;
+  energyBefore: number;
+  energyAfter: number;
+  energyRecovered: number;
+}
+
 interface BattleInterfaceProps {
   slug: string;
-  initialGameState: GameState | null;
-  myCharacterId: string; // Can be "BROWSER_DETERMINED" to determine from localStorage
-  browserId: string; // Can be "BROWSER_DETERMINED" to determine from localStorage
+  initialGameState: GameState;
+  myCharacterId: string;
+  browserId: string;
   currentImageUrl?: string;
+  sseClient?: SSEClient | null;
 }
-
-interface HealthBarProps {
-  label: string;
-  current: number;
-  max: number;
-  isEnemy?: boolean;
-}
-
-const HealthBar: React.FC<HealthBarProps> = ({
-  label,
-  current,
-  max,
-  isEnemy = false,
-}) => (
-  <div
-    className={`w-full md:w-5/12 p-2 bg-gray-200 border-2 border-black rounded-lg shadow-md ${isEnemy ? 'text-right' : ''}`}
-  >
-    <div className="flex justify-between items-center mb-1">
-      <span className="text-xs font-bold text-black">{label}</span>
-      <span className="text-xs text-black">
-        {current} / {max} HP
-      </span>
-    </div>
-    <div className="w-full bg-gray-400 rounded-full h-4 border border-black overflow-hidden">
-      <div
-        className="bg-green-500 h-full transition-all duration-500"
-        style={{ width: `${Math.max(0, (current / max) * 100)}%` }}
-      ></div>
-    </div>
-  </div>
-);
 
 export default function BattleInterface({
   slug,
@@ -82,37 +61,11 @@ export default function BattleInterface({
   myCharacterId: propMyCharacterId,
   browserId: propBrowserId,
   currentImageUrl,
+  sseClient,
 }: BattleInterfaceProps) {
-  // Determine browser ID and character ID
-  const getBrowserId = () => {
-    if (typeof window === 'undefined') return '';
-    let browserId = localStorage.getItem('naturebrawl.browserId');
-    if (!browserId) {
-      browserId = 'browser_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('naturebrawl.browserId', browserId);
-    }
-    return browserId;
-  };
-
-  const browserId =
-    propBrowserId === 'BROWSER_DETERMINED' ? getBrowserId() : propBrowserId;
-
-  // Determine which character is mine based on browser ID
-  const getMyCharacterId = () => {
-    if (propMyCharacterId !== 'BROWSER_DETERMINED') return propMyCharacterId;
-    if (!initialGameState || !browserId) return '';
-
-    // Check which character belongs to this browser
-    if (initialGameState.player1.browserId === browserId)
-      return initialGameState.player1.id;
-    if (initialGameState.player2.browserId === browserId)
-      return initialGameState.player2.id;
-
-    // Fallback to player1 if no match (shouldn't happen in normal flow)
-    return initialGameState.player1.id;
-  };
-
-  const myCharacterId = getMyCharacterId();
+  // Use the provided character ID directly (no more BROWSER_DETERMINED)
+  const myCharacterId = propMyCharacterId;
+  const browserId = propBrowserId;
 
   const [gameState, setGameState] = useState<GameState | null>(
     initialGameState
@@ -121,7 +74,12 @@ export default function BattleInterface({
   const [processingAttackId, setProcessingAttackId] = useState<string | null>(
     null
   );
+  const [processingRest, setProcessingRest] = useState<boolean>(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [currentBattleImage, setCurrentBattleImage] = useState<
+    string | undefined
+  >(currentImageUrl);
+  const [isImageGenerating, setIsImageGenerating] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -136,17 +94,27 @@ export default function BattleInterface({
       ? gameState.player2
       : gameState.player1
     : null;
-  const isPlayer1Me = myCharacter?.id === gameState?.player1.id;
+
+  // Determine character positions based on creation order (challenger vs challengee)
+  // characters[0] = challenger (always on left), characters[1] = challengee (always on right)
+  const challengerCharacter = gameState?.player1 || null;
+  const isMyCharacterChallenger = myCharacter?.id === challengerCharacter?.id;
+
   const isMyTurn = isHydrated
     ? gameState?.currentPlayer === myCharacterId
     : false;
 
-  // Layout classes based on player position
+  // Layout classes based on consistent challenger/challengee positioning:
+  // Challenger = left side (in both image and UI), Challengee = right side (in both image and UI)
   const layoutClasses = {
-    // Match character positions in generated images:
-    // Player 1 = right side, Player 2 = left side
-    playerHealth: isPlayer1Me ? 'bottom-4 right-4' : 'bottom-4 left-4',
-    enemyHealth: isPlayer1Me ? 'bottom-4 left-4' : 'bottom-4 right-4',
+    // My health bar position depends on whether I'm the challenger or challengee
+    playerHealth: isMyCharacterChallenger
+      ? 'bottom-4 left-4'
+      : 'bottom-4 right-4',
+    // Enemy health bar is opposite of mine
+    enemyHealth: isMyCharacterChallenger
+      ? 'bottom-4 right-4'
+      : 'bottom-4 left-4',
     turnIndicator: 'top-4 right-4',
     currentPlayerIndicator: 'top-4 left-4',
   };
@@ -155,6 +123,22 @@ export default function BattleInterface({
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  // Auto-clear image loading state after timeout (safety measure)
+  useEffect(() => {
+    if (isImageGenerating) {
+      const timeout = setTimeout(() => {
+        console.warn('Image generation timeout - clearing loading state');
+        setIsImageGenerating(false);
+        addBattleMessage(
+          '⚠️ Image generation is taking longer than expected',
+          'warning'
+        );
+      }, 30000); // 30 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isImageGenerating]);
 
   // Load battle events from database on mount
   useEffect(() => {
@@ -203,50 +187,6 @@ export default function BattleInterface({
     loadBattleEvents();
   }, [slug]);
 
-  // Setup SSE connection
-  useEffect(() => {
-    if (!slug) return;
-
-    console.log('BattleInterface: Setting up SSE connection for fight:', slug);
-
-    const client = new SSEClient(slug);
-
-    const handleChallengeAccepted = () => {
-      window.location.reload();
-    };
-
-    const handleAttackResultEvent = (data: any) => {
-      handleAttackResult(data.attackResult, data.gameState);
-    };
-
-    const handleImageUpdated = (data: any) => {
-      handleImageUpdate(data.imageUrl, data.turnNumber);
-    };
-
-    const handleImageFailed = (data: any) => {
-      console.warn('Image generation failed:', data.error);
-      addBattleMessage(`⚠️ Image generation failed: ${data.error}`, 'warning');
-    };
-
-    // Subscribe to events
-    client.on('challenge_accepted', handleChallengeAccepted);
-    client.on('attack_result', handleAttackResultEvent);
-    client.on('image_updated', handleImageUpdated);
-    client.on('image_failed', handleImageFailed);
-
-    // Start the connection
-    client.connect();
-
-    return () => {
-      console.log('BattleInterface: Cleaning up SSE connection');
-      client.off('challenge_accepted', handleChallengeAccepted);
-      client.off('attack_result', handleAttackResultEvent);
-      client.off('image_updated', handleImageUpdated);
-      client.off('image_failed', handleImageFailed);
-      client.disconnect();
-    };
-  }, [slug]);
-
   // Scroll to bottom of messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -270,20 +210,39 @@ export default function BattleInterface({
   };
 
   const handleAttackResult = (attackResult: any, newGameState: GameState) => {
+    console.log('BattleInterface: handleAttackResult called with:', {
+      attackResult,
+      newGameState,
+    });
+
     setGameState(newGameState);
     setProcessingAttackId(null);
 
-    // Add battle messages
-    const attacker =
-      newGameState.player1.id === attackResult.attackerId
-        ? newGameState.player1
-        : newGameState.player2;
-    const defender =
-      newGameState.player1.id === attackResult.defenderId
-        ? newGameState.player1
-        : newGameState.player2;
-    const attackerName = getSpeciesName(attacker.species);
-    const defenderName = getSpeciesName(defender.species);
+    // Start image loading if the attack hit or if it's a game over
+    if (attackResult.isHit || attackResult.gameOver) {
+      setIsImageGenerating(true);
+      console.log('Image generation started for attack result');
+    }
+
+    // Add battle message based on result
+    const attackerCharacter =
+      attackResult.attackerId === myCharacter?.id
+        ? myCharacter
+        : enemyCharacter;
+    const defenderCharacter =
+      attackResult.defenderId === myCharacter?.id
+        ? myCharacter
+        : enemyCharacter;
+
+    const attackerName = attackerCharacter?.species
+      ? attackerCharacter.species.charAt(0).toUpperCase() +
+        attackerCharacter.species.slice(1)
+      : 'Unknown';
+
+    const defenderName = defenderCharacter?.species
+      ? defenderCharacter.species.charAt(0).toUpperCase() +
+        defenderCharacter.species.slice(1)
+      : 'Unknown';
 
     if (attackResult.isHit) {
       let message = `⚔️ ${attackerName} used ${attackResult.attackUsed.name}!`;
@@ -305,18 +264,80 @@ export default function BattleInterface({
     }
   };
 
+  const handleRestResult = (
+    restResult: RestResult,
+    newGameState: GameState
+  ) => {
+    // Clear processing state
+    setProcessingRest(false);
+
+    // Update the game state
+    setGameState(newGameState);
+
+    // Find the character who rested
+    const restingCharacter =
+      newGameState.player1.id === restResult.characterId
+        ? newGameState.player1
+        : newGameState.player2;
+
+    const speciesName = getSpeciesName(restingCharacter.species);
+
+    // Add battle message
+    addBattleMessage(
+      `🌟 ${speciesName} rests and recovers ${restResult.energyRecovered} energy!`,
+      'info'
+    );
+  };
+
   const handleImageUpdate = (imageUrl: string, turnNumber: number) => {
     console.log('Image ready:', imageUrl, 'for turn:', turnNumber);
+
+    // Clear the loading state
+    setIsImageGenerating(false);
+
+    // Update the state directly to trigger re-render
+    setCurrentBattleImage(imageUrl);
+
+    // If the image element exists, also update it with smooth transition
     const imageElement = document.getElementById(
       'fight-scene-image'
     ) as HTMLImageElement;
-    if (imageElement && imageUrl) {
-      imageElement.style.opacity = '0';
-      imageElement.src = imageUrl;
-      imageElement.onload = () => {
-        imageElement.style.transition = 'opacity 0.5s ease';
-        imageElement.style.opacity = '1';
+
+    if (imageElement) {
+      // Add cache busting parameter to force image reload
+      const cacheBustedUrl =
+        imageUrl + (imageUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
+
+      console.log(
+        'Updating image from',
+        imageElement.src,
+        'to',
+        cacheBustedUrl
+      );
+
+      // Create a new image to preload and check if it's valid
+      const newImage = new Image();
+
+      newImage.onload = () => {
+        console.log('New image loaded successfully, updating display');
+        imageElement.style.opacity = '0';
+        imageElement.style.transition = 'opacity 0.3s ease';
+
+        setTimeout(() => {
+          imageElement.src = cacheBustedUrl;
+          imageElement.style.opacity = '1';
+        }, 300);
       };
+
+      newImage.onerror = (error) => {
+        console.error('Failed to load new image:', cacheBustedUrl, error);
+        addBattleMessage('⚠️ Failed to load battle image', 'warning');
+      };
+
+      // Start loading the new image
+      newImage.src = cacheBustedUrl;
+    } else {
+      console.log('Image element not found, state updated directly');
     }
   };
 
@@ -358,11 +379,129 @@ export default function BattleInterface({
     }
   };
 
+  const executeRest = async () => {
+    if (!myCharacter || processingRest || processingAttackId) return;
+
+    setProcessingRest(true);
+
+    const myName =
+      myCharacter.species.charAt(0).toUpperCase() +
+      myCharacter.species.slice(1);
+    addBattleMessage(`🌟 ${myName} is taking a moment to rest...`, 'info');
+
+    try {
+      const response = await fetch(`/api/brawls/${slug}/rest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterId: myCharacter.id,
+          browserId,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Rest failed');
+      }
+    } catch (error) {
+      console.error('Error executing rest:', error);
+      addBattleMessage(
+        `❌ Rest failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error'
+      );
+      setProcessingRest(false);
+    }
+  };
+
   const getHealthPercentage = (health: number, maxHealth: number) =>
     Math.max(0, Math.min(100, (health / maxHealth) * 100));
 
   const getEnergyPercentage = (energy: number, maxEnergy: number) =>
     Math.max(0, Math.min(100, (energy / maxEnergy) * 100));
+
+  // Setup SSE event listeners using the passed client
+  useEffect(() => {
+    if (!sseClient) {
+      console.log('BattleInterface: No SSE client provided');
+      return;
+    }
+
+    console.log(
+      'BattleInterface: Setting up SSE event listeners for sseClient:',
+      sseClient
+    );
+
+    const handleAttackResultEvent = (data: any) => {
+      console.log(
+        'BattleInterface: handleAttackResultEvent called with:',
+        data
+      );
+      if (data.attackResult && data.gameState) {
+        console.log('BattleInterface: Calling handleAttackResult...');
+        handleAttackResult(data.attackResult, data.gameState);
+      } else {
+        console.error(
+          'BattleInterface: Missing attackResult or gameState in data:',
+          data
+        );
+      }
+    };
+
+    const handleRestResultEvent = (data: any) => {
+      console.log('BattleInterface: handleRestResultEvent called with:', data);
+      if (data.restResult && data.gameState) {
+        console.log('BattleInterface: Calling handleRestResult...');
+        handleRestResult(data.restResult, data.gameState);
+      } else {
+        console.error(
+          'BattleInterface: Missing restResult or gameState in data:',
+          data
+        );
+      }
+    };
+
+    const handleImageUpdated = (data: any) => {
+      console.log('BattleInterface: Image updated event received:', data);
+      if (data.imageUrl) {
+        console.log(
+          'BattleInterface: Calling handleImageUpdate with:',
+          data.imageUrl,
+          data.turnNumber
+        );
+        handleImageUpdate(data.imageUrl, data.turnNumber);
+      } else {
+        console.error(
+          'BattleInterface: Image updated event missing imageUrl:',
+          data
+        );
+      }
+    };
+
+    const handleImageFailed = (data: any) => {
+      console.warn('BattleInterface: Image generation failed:', data.error);
+      setIsImageGenerating(false);
+      addBattleMessage(`⚠️ Image generation failed: ${data.error}`, 'warning');
+    };
+
+    // Subscribe to events
+    console.log('BattleInterface: Subscribing to attack_result event...');
+    sseClient.on('attack_result', handleAttackResultEvent);
+    console.log('BattleInterface: Subscribing to rest_result event...');
+    sseClient.on('rest_result', handleRestResultEvent);
+    console.log('BattleInterface: Subscribing to image_updated event...');
+    sseClient.on('image_updated', handleImageUpdated);
+    console.log('BattleInterface: Subscribing to image_failed event...');
+    sseClient.on('image_failed', handleImageFailed);
+    console.log('BattleInterface: All event subscriptions completed');
+
+    return () => {
+      console.log('BattleInterface: Cleaning up SSE event listeners');
+      sseClient.off('attack_result', handleAttackResultEvent);
+      sseClient.off('rest_result', handleRestResultEvent);
+      sseClient.off('image_updated', handleImageUpdated);
+      sseClient.off('image_failed', handleImageFailed);
+    };
+  }, [sseClient]);
 
   if (!gameState || !myCharacter || !enemyCharacter) {
     return (
@@ -387,10 +526,10 @@ export default function BattleInterface({
       {/* Fight Scene Image with Overlays */}
       <div className="relative">
         <div className="relative w-full aspect-[4/3]">
-          {currentImageUrl ? (
+          {currentBattleImage ? (
             <img
               id="fight-scene-image"
-              src={currentImageUrl}
+              src={currentBattleImage}
               alt="Fight scene"
               className="w-full h-full object-cover pixel-perfect pokemon-window"
             />
@@ -399,6 +538,22 @@ export default function BattleInterface({
               <div className="text-center">
                 <div className="text-2xl mb-2">⚡</div>
                 <p className="text-black font-bold">Loading Battle...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Image Generation Loading Overlay */}
+          {isImageGenerating && (
+            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-20">
+              <div
+                className="bg-black bg-opacity-80 text-white px-2 py-1 rounded text-xs flex items-center gap-1"
+                style={{
+                  fontFamily: "'Press Start 2P', monospace",
+                  fontSize: '8px',
+                }}
+              >
+                <div className="animate-spin">⚡</div>
+                <span>RENDERING</span>
               </div>
             </div>
           )}
@@ -644,67 +799,110 @@ export default function BattleInterface({
             </div>
 
             {isMyTurn && gameState.gamePhase === 'active' ? (
-              <div className="grid grid-cols-2 gap-3">
-                {myCharacter.attacks.map((attack) => {
-                  const canUse = myCharacter.energy >= attack.energyCost;
-                  const isProcessing = processingAttackId === attack.id;
+              <div className="space-y-3">
+                {/* Attack Buttons */}
+                <div className="grid grid-cols-2 gap-3">
+                  {myCharacter.attacks.map((attack) => {
+                    const canUse = myCharacter.energy >= attack.energyCost;
+                    const isProcessing = processingAttackId === attack.id;
 
-                  return (
-                    <button
-                      key={attack.id}
-                      className={`
-                        border-2 border-black p-4 cursor-pointer transition-all duration-150 relative overflow-hidden
-                        ${
-                          !canUse
-                            ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                    return (
+                      <button
+                        key={attack.id}
+                        className={`
+                          border-2 border-black p-4 cursor-pointer transition-all duration-150 relative overflow-hidden
+                          ${
+                            !canUse
+                              ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                              : isProcessing
+                                ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-black animate-pulse cursor-wait'
+                                : 'bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1'
+                          }
+                        `}
+                        style={{
+                          fontFamily: "'Press Start 2P', monospace",
+                          fontSize: '9px',
+                          boxShadow: !canUse
+                            ? 'none'
                             : isProcessing
-                              ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-black animate-pulse cursor-wait'
-                              : 'bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1'
+                              ? 'inset -1px -1px 0px #f59e0b, inset 1px 1px 0px #fbbf24'
+                              : 'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
+                        }}
+                        disabled={
+                          !canUse || !!processingAttackId || processingRest
+                        }
+                        onClick={() => executeAttack(attack.id)}
+                        title={
+                          !canUse
+                            ? `Not enough energy! Need ${attack.energyCost} EP, have ${myCharacter.energy} EP`
+                            : ''
+                        }
+                      >
+                        {isProcessing ? (
+                          '⏳ PROCESSING...'
+                        ) : (
+                          <>
+                            <div className="font-bold text-xs mb-2">
+                              {attack.name.toUpperCase()}
+                            </div>
+                            <div className="flex justify-between items-center mt-2 text-xs">
+                              <span className="inline-flex items-center gap-1">
+                                <span>⚔️</span>
+                                <span>{attack.damage}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <span>⚡</span>
+                                <span>{attack.energyCost}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <span>✨</span>
+                                <span>{attack.criticalHitChance}%</span>
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Rest Button - Show when no attacks are available or energy is low */}
+                {(myCharacter.attacks.every(
+                  (attack) => myCharacter.energy < attack.energyCost
+                ) ||
+                  myCharacter.energy < myCharacter.maxEnergy) && (
+                  <div className="text-center">
+                    <button
+                      className={`
+                        border-2 border-black p-4 cursor-pointer transition-all duration-150 relative
+                        ${
+                          processingRest
+                            ? 'bg-gradient-to-br from-blue-400 to-blue-500 text-white animate-pulse cursor-wait'
+                            : 'bg-gradient-to-br from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1'
                         }
                       `}
                       style={{
                         fontFamily: "'Press Start 2P', monospace",
                         fontSize: '9px',
-                        boxShadow: !canUse
-                          ? 'none'
-                          : isProcessing
-                            ? 'inset -1px -1px 0px #f59e0b, inset 1px 1px 0px #fbbf24'
-                            : 'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
+                        boxShadow: processingRest
+                          ? 'inset -1px -1px 0px #3b82f6, inset 1px 1px 0px #60a5fa'
+                          : 'inset -2px -2px 0px #c0c0c0, inset 2px 2px 0px #ffffff, 2px 2px 0px #808080',
                       }}
-                      disabled={!canUse || !!processingAttackId}
-                      onClick={() => executeAttack(attack.id)}
-                      title={
-                        !canUse
-                          ? `Not enough energy! Need ${attack.energyCost} EP, have ${myCharacter.energy} EP`
-                          : ''
-                      }
+                      disabled={!!processingAttackId || processingRest}
+                      onClick={executeRest}
+                      title="Rest to recover energy"
                     >
-                      {isProcessing ? (
-                        '⏳ PROCESSING...'
+                      {processingRest ? (
+                        '⏳ RESTING...'
                       ) : (
                         <>
-                          <div className="font-bold text-xs mb-2">
-                            {attack.name.toUpperCase()}
-                          </div>
-                          <div className="flex justify-between items-center mt-2 text-xs">
-                            <span className="inline-flex items-center gap-1">
-                              <span>⚔️</span>
-                              <span>{attack.damage}</span>
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span>⚡</span>
-                              <span>{attack.energyCost}</span>
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span>✨</span>
-                              <span>{attack.criticalHitChance}%</span>
-                            </span>
-                          </div>
+                          <div className="font-bold text-xs mb-2">REST</div>
+                          <div className="text-xs">🌟 RECOVER ENERGY</div>
                         </>
                       )}
                     </button>
-                  );
-                })}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center text-xs">

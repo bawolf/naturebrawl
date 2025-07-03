@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db, brawls, battleEvents } from '../../../../lib/db';
-import { eq, desc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export const prerender = false;
 

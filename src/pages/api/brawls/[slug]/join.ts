@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db, brawls, characters, attacks } from '../../../../lib/db';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import {
   isValidSpecies,
@@ -47,7 +47,12 @@ export const POST: APIRoute = async ({ request, params }) => {
     const brawl = await db.query.brawls.findFirst({
       where: eq(brawls.slug, slug),
       with: {
-        characters: true,
+        characters: {
+          orderBy: (characters, { asc }) => [asc(characters.createdAt)], // Challenger created first
+          with: {
+            attacks: true, // Include attacks for existing characters
+          },
+        },
       },
     });
 
@@ -137,14 +142,15 @@ export const POST: APIRoute = async ({ request, params }) => {
     broadcastToFight(slug, {
       type: 'challenge_accepted',
       challenger: {
-        species: challengerCharacter.species,
-        name: getSpeciesName(challengerCharacter.species),
-        emoji: getSpeciesEmoji(challengerCharacter.species),
+        ...challengerCharacter,
+        attacks: challengerCharacter.attacks || [], // Include attacks if available
       },
       challengee: {
-        species: species,
-        name: getSpeciesName(species),
-        emoji: getSpeciesEmoji(species),
+        ...newCharacter[0],
+        attacks: characterAttacks.map((attack) => ({
+          ...attack,
+          id: attack.id || nanoid(), // Ensure attack has an ID
+        })),
       },
       brawlReady: true,
     });

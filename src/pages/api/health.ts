@@ -1,26 +1,23 @@
 import type { APIRoute } from 'astro';
-import { getSocketIO, getConnectionStats } from '../../lib/socket-server';
+import { getConnectionStats } from './brawls/[slug]/stream';
 
 export const prerender = false;
 
 export const GET: APIRoute = async () => {
   try {
-    const socketIO = getSocketIO();
-    const stats = getConnectionStats();
+    const sseStats = getConnectionStats();
 
     const health = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      socketIO: {
-        initialized: !!socketIO,
-        connections: stats.totalConnections,
-        rooms: Object.keys(stats.rooms).length,
-        roomDetails: stats.rooms,
+      sse: {
+        totalConnections: sseStats.totalConnections,
+        activeFights: sseStats.totalFights,
+        fightDetails: sseStats.fightDetails,
       },
       environment: process.env.NODE_ENV || 'development',
       version: process.env.npm_package_version || 'unknown',
       debug: {
-        globalSocketIO: !!(globalThis as any).__socketIO,
         nodeEnv: process.env.NODE_ENV,
         siteUrl: process.env.SITE_URL,
       },

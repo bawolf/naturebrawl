@@ -1,10 +1,6 @@
 import type { Character } from '../../db/schema';
 import type { AttackResult } from '../../game/engine';
-import {
-  generateInitialScenePrompt,
-  buildAttackModification,
-  buildVictoryModification,
-} from './prompts';
+import { generateInitialScenePrompt } from './prompts';
 import {
   generateAttackSceneModification,
   generateVictorySceneModification,

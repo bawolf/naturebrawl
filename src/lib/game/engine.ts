@@ -32,9 +32,16 @@ export interface AttackResult {
 }
 
 export interface TurnAction {
-  type: 'attack';
+  type: 'attack' | 'rest';
   characterId: string;
-  attackId: string;
+  attackId?: string; // Only required for attack actions
+}
+
+export interface RestResult {
+  characterId: string;
+  energyBefore: number;
+  energyAfter: number;
+  energyRecovered: number;
 }
 
 /**
@@ -268,6 +275,94 @@ export class GameEngine {
       turnNumber: this.gameState.currentTurn,
       winner: this.gameState.winner,
     };
+  }
+
+  /**
+   * Check if a character can rest (recover energy)
+   */
+  canRest(characterId: string): { canRest: boolean; reason?: string } {
+    const character = this.gameState.brawl.characters.find(
+      (c) => c.id === characterId
+    );
+    if (!character) {
+      return { canRest: false, reason: 'Character not found' };
+    }
+
+    if (character.health <= 0) {
+      return { canRest: false, reason: 'Character is defeated' };
+    }
+
+    if (this.gameState.gamePhase !== 'active') {
+      return { canRest: false, reason: 'Game not active' };
+    }
+
+    if (this.gameState.brawl.currentPlayerId !== characterId) {
+      return { canRest: false, reason: 'Not your turn' };
+    }
+
+    if (character.energy >= character.maxEnergy) {
+      return { canRest: false, reason: 'Already at max energy' };
+    }
+
+    return { canRest: true };
+  }
+
+  /**
+   * Execute a rest action and return the result
+   */
+  executeRest(characterId: string): RestResult {
+    const character = this.gameState.brawl.characters.find(
+      (c) => c.id === characterId
+    );
+
+    if (!character) {
+      throw new Error('Character not found');
+    }
+
+    // Validate the rest action can be performed
+    const validation = this.canRest(characterId);
+    if (!validation.canRest) {
+      throw new Error(validation.reason || 'Cannot rest');
+    }
+
+    // Store initial energy
+    const energyBefore = character.energy;
+
+    // Calculate energy recovery (recovery stat + 10 base recovery)
+    const baseRecovery = 10;
+    const totalRecovery = character.recovery + baseRecovery;
+    const energyRecovered = Math.min(
+      totalRecovery,
+      character.maxEnergy - character.energy
+    );
+
+    // Apply energy recovery
+    character.energy = Math.min(
+      character.maxEnergy,
+      character.energy + energyRecovered
+    );
+
+    // Switch turns and increment turn counter
+    this.switchTurn();
+    this.gameState.currentTurn++;
+    this.gameState.brawl.turnNumber = this.gameState.currentTurn;
+
+    return {
+      characterId,
+      energyBefore,
+      energyAfter: character.energy,
+      energyRecovered,
+    };
+  }
+
+  /**
+   * Check if a character has any available actions (attacks or can rest)
+   */
+  hasAvailableActions(characterId: string): boolean {
+    const availableAttacks = this.getAvailableAttacks(characterId);
+    const canRest = this.canRest(characterId);
+
+    return availableAttacks.length > 0 || canRest.canRest;
   }
 }
 
