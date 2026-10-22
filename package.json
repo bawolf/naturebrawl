@@ -17,7 +17,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "^0.9.10",
     "@astrojs/node": "^9.2.2",
     "@astrojs/react": "^4.3.0",
     "@fastify/cors": "^11.0.1",
