@@ -20,6 +20,8 @@ pnpm-debug.log*
 # Google Cloud service account keys
 .gcp/
 *.json
+!package.json
+!tsconfig.json
 
 # macOS-specific files
 .DS_Store
