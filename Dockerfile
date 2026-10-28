@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1
 
-FROM node:22.23.4-bookworm-slim AS base
+FROM node:26.12.0-bookworm-slim AS base
 
 LABEL fly_launch_runtime="Astro"
 
